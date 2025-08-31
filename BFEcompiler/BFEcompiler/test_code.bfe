@@ -90,34 +90,62 @@ read_cell_array(array test value){
 <
 }
 
-init_comparison(data){
-  data+0
-  data> # Error
-  data>+1 
-  data>+0 
-  data> # Error
-  data>+20 # A 
-  data>+30 # B
-  data>+30 # B
-  data> # Error
-  data>+0
-  <<<<<<<<
+
+comparison(op1 op2 res1 res2){
+    copy(op1 op1_)
+    copy(op2 res1)
+    op1_
+    [
+           t0+1
+           res1
+           [
+                  res1-1
+                  zero(t0)
+                  t1+1
+           res1
+           ]
+           #if y => t1 = y; y = 0; t0 = 0 else t0 = 1
+
+           t0
+           [
+                  t0-1
+                  res2+1
+           t0
+           ]
+           #if t0 => t0 = 0; res+
+
+           t1
+           [
+                  t1-1
+                  res1+1
+           t1
+           ]
+           #if t1 => t1 = 0; y = t1 
+
+           res1-1
+           op1_-1
+    ]
+    res2[
+        res1[
+            op1_+1
+            res1+1
+        ]
+        zero(res2)
+
+    ]
+
+    copy(op1_ res2)
 
 }
 
-logic(data){
 
-  data>>>>>
-  +1>+1<
-  [-1>-1[>>]<<<] 
-
-  
-}
+x+70
+y+30
+comparison(x y res1 res2)
+res1.
+res2.
 
 
-    
-data:9  #0E1CEC0E0   C=cursor(5 or 3) E=error 
-    #SDSSDSSDS    3 5   A<B =5 A>B=3         
-    #012345678
-init_comparison(data)
-logic(data)
+
+
+
