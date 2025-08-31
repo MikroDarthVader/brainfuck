@@ -1,0 +1,123 @@
+zero(var)
+{
+  var [-1]
+}
+
+copy(in out)
+{
+  zero(tmp)
+  zero(out)
+  in [tmp +1 out +1 in -1]
+  tmp [in +1 tmp -1]
+}
+
+sum(op1 op2 res)
+{
+  copy(op1 op1_)
+  copy(op2 op2_)
+  zero(res)
+  op1_ [res +1 op1_ -1]
+  op2_ [res +1 op2_ -1]
+}
+
+subtraction(op1 op2 res)
+{
+  
+  copy(op1 res)
+  copy(op2 op2_)
+  op2_ [res -1 op2_ -1]
+}
+
+multiply(a b res){
+  zero(res)
+  copy(b counter)
+  counter[copy(a tmp)tmp[res +1 tmp -1]counter -1 counter]
+}
+
+pow(a b res){
+  zero(res)
+  res +1
+  copy(b counter)
+  counter[copy(res tmp)zero(res)multiply(a tmp res)counter -1 counter]
+}
+
+div(op1 op2 res){
+  zero(res)
+  copy(op1 op1_)
+  copy(op2 op2_) 
+  zero(op1__)
+  op1_[subtraction(op1_ op2_ op1__) copy(op1__ op1_) res+1 op1_]
+}
+
+
+not(in out)
+{
+  
+  zero(out)
+  out+1
+  in [zero(out) in-1]
+  copy(out in)
+  
+}
+  
+
+init_array(array len)  
+{
+  len[array>>>+1<<< len-1]
+  array>>>
+  [[-1>>>+1<<<]+1>>>-1]
+  <<<[<<<]
+}
+
+
+set_cell_array(array index value){
+  index[-1 array>>>>>+1<<<<< index]
+  value[-1 array>>+1<< value]
+  array>>>>>
+  [[-1>>>+1<<<]<<<[-1>>>+1<<<]>>> >>>-1]
+  <<<[-1<+1>]
+  >[<<<]
+}
+
+read_cell_array(array test value){
+  
+  test[-1 array>>>>>+1<<<<< test]
+  array>>>>>
+  [[-1>>>+1<<<]>>>-1]<<<<
+  [-1>+1<]<
+  [>>[-1<<<+1>>>]<<<<<]
+  array>>[-1<< value+1 array>>]<
+<
+}
+
+init_comparison(data){
+  data+0
+  data> # Error
+  data>+1 
+  data>+0 
+  data> # Error
+  data>+20 # A 
+  data>+30 # B
+  data>+30 # B
+  data> # Error
+  data>+0
+  <<<<<<<<
+
+}
+
+logic(data){
+
+  data>>>>>
+  +1>+1<
+  [-1>-1[>>]<<<] 
+
+  
+}
+
+
+    
+data:9  #0E1CEC0E0   C=cursor(5 or 3) E=error 
+    #SDSSDSSDS    3 5   A<B =5 A>B=3         
+    #012345678
+init_comparison(data)
+logic(data)
