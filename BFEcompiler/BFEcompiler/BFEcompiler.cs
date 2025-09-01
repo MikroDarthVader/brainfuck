@@ -359,7 +359,11 @@ namespace BFEcompiler
             while (tmp_cursor < code.Length)
             {
                 for (cursor = tmp_cursor; cursor < code.Length && special_chars.Contains(code[cursor]) || cursor < code.Length && char.IsDigit(code[cursor]); cursor++)//skip not name
+                {
+                    if (code[cursor] == '<') position -= 1;
+                    else if (code[cursor] == '>') position += 1;
                     sb.Append(code[cursor]);
+                }
 
 
                 for (tmp_cursor = cursor; tmp_cursor < code.Length && !special_chars.Contains(code[tmp_cursor]); tmp_cursor++) ;

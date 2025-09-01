@@ -1,10 +1,6 @@
-print5(str){
-  str
-  .>.>.>.>.
-  <<<<
-}
 
+var+*g
+>
+var.
 
-str:5
-"hello"
-print5(str)
+#now you don't need to return to the original position after moving <>
