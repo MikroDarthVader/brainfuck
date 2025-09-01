@@ -83,6 +83,31 @@ namespace BFEcompiler
                 else if (code[index] == '\n')
                     inComment = false;
 
+                if (!inComment && code[index] == '\"')
+                {
+                    int tmp_cursor = index + 1;
+                    for (; tmp_cursor < code.Length - 1 && code[tmp_cursor] != '\"'; tmp_cursor++) ;
+
+                    if (code[tmp_cursor] != '\"')
+                        throw new FormatException("not a complete interpretation of the lines " + code.Substring(index, tmp_cursor - index + 1));
+
+                    string str = code.Substring(index + 1, tmp_cursor - index - 1);
+
+                    index = tmp_cursor + 1;
+
+                    StringBuilder res = new StringBuilder();
+                    foreach (char c in str)
+                    {
+                        res.Append('+', c);
+                        res.Append('>');
+                    }
+                    res.Append('<', str.Length);
+                    result.Append(res);
+                    continue;
+                }
+
+                
+
                 if (inComment || (code[index] != '+' && code[index] != '-'))
                 {
                     if (!inComment)

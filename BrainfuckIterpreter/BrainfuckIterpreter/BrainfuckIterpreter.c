@@ -64,7 +64,7 @@ int main() {
             if (memory[cursor_position] == 0x64)
                 printf("\n");
             else
-                printf("%d ", memory[cursor_position]);
+                printf("%c", memory[cursor_position]);
             break;
         case ',':
             memory[cursor_position] = (char)_getch();
