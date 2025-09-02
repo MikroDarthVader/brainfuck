@@ -5,7 +5,7 @@
 #include <windows.h>
 
 #define FILENAME "%s\\..\\..\\test_code.bf"
-#define MEMORYSIZE 3000
+#define MEMORYSIZE 30000
 
 char full_path[MAX_PATH];
 char* get_full_path(const char* relative)
@@ -61,10 +61,7 @@ int main() {
             memory[cursor_position]--;
             break;
         case '.':
-            if (memory[cursor_position] == 0x64)
-                printf("\n");
-            else
-                printf("%c", memory[cursor_position]);
+            printf("%c", memory[cursor_position]);
             break;
         case ',':
             memory[cursor_position] = (char)_getch();

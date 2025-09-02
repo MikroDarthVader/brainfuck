@@ -83,6 +83,32 @@ namespace BFEcompiler
                 else if (code[index] == '\n')
                     inComment = false;
 
+                if (!inComment && code[index] == '\'')
+                {
+                    int tmp_cursor = index + 1;
+                    for (; tmp_cursor < code.Length - 1 && code[tmp_cursor] != '\''; tmp_cursor++) ;
+
+                    if (code[tmp_cursor] != '\'')
+                        throw new FormatException("not a complete interpretation of the lines " + code.Substring(index, tmp_cursor - index + 1));
+
+                    string str = code.Substring(index + 1, tmp_cursor - index - 1);
+
+                    char buffer = str[0];
+                    result.Append('+', buffer);
+                    foreach (char c in str) {
+
+                        int distance = buffer - c < 0 ? -(buffer - c) : buffer - c; // модуль числа                                                                                              // куда двигатся для того чтоб прийти к перменной
+                        if (buffer - c < 0)
+                            result.Append('+', distance);
+                        else
+                            result.Append('-', distance);
+                        result.Append('.');
+                        buffer = c;
+                    }
+                    index = tmp_cursor + 1;
+                    continue;
+                }
+
                 if (!inComment && code[index] == '\"')
                 {
                     int tmp_cursor = index + 1;
