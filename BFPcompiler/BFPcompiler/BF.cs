@@ -2,9 +2,6 @@
 
 namespace BFPcompiler
 {
-    /// <summary>
-    /// Поддержка базовых операций brainfuck
-    /// </summary>
     public class BFCompiler
     {
         private StringBuilder bf;
@@ -16,54 +13,37 @@ namespace BFPcompiler
             carriage = 0;
         }
 
-        public static BFCompiler operator ++(BFCompiler bfc) { return bfc += 1; }
-        public static BFCompiler operator --(BFCompiler bfc) { return bfc -= 1; }
-
-        public static BFCompiler operator >>(BFCompiler bfc, int count)
+        public void Minus(int pos, int val = 1) { Modify(pos, -val); }
+        public void Plus(int pos, int val = 1) { Modify(pos, val); }
+        public void Print(int pos) { MoveTo(pos); bf.Append('.'); }
+        public void Input(int pos) { MoveTo(pos); bf.Append(','); }
+        public void While(int pos, Action code)
         {
-            bfc.ShiftContext(count);
-            return bfc;
+            MoveTo(pos);
+            bf.Append('[');
+
+            code();
+
+            MoveTo(pos);
+            bf.Append(']');
         }
 
-        public static BFCompiler operator <<(BFCompiler bfc, int count)
+        public void Modify(int pos, int val)
         {
-            bfc.ShiftContext(-count);
-            return bfc;
+            MoveTo(pos);
+
+            char command = val >= 0 ? '+' : '-';
+            int absVal = val >= 0 ? val : -val;
+
+            bf.Append(new string(command, absVal % 256));
         }
 
-        public static BFCompiler operator +(BFCompiler bfc, byte val)
-        {
-            bfc.Modify(val);
-            return bfc;
-        }
-
-        public static BFCompiler operator -(BFCompiler bfc, byte val)
-        {
-            bfc.Modify(-val);
-            return bfc;
-        }
+        public void AppendMarker(char marker) => bf.Append(marker);
 
         public void MoveTo(int pos)
         {
             ShiftContext(pos - carriage);
             carriage = pos;
-        }
-
-        protected void Modify(int val)
-        {
-            char command = val >= 0 ? '+' : '-';
-            int absVal = val >= 0 ? val : -val;
-
-            bf.Append(new string(command, absVal));
-        }
-
-        public void While(int pos, Action code)
-        {
-            MoveTo(pos);
-            bf.Append('[');
-            code();
-            MoveTo(pos);
-            bf.Append(']');
         }
 
         public void ShiftContext(int shift)

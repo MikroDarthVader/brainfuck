@@ -3,127 +3,96 @@
     /// <summary>
     /// Поддержка сервисных ячеек, динамической адресации
     /// Структура данных в текущем контексте:
-    ///     block[0] = {address, stack[stackDensity раз], data},
-    ///     block[1] = {stack[stackDensity + 1 раз], data},
-    ///     block[2] = {stack[stackDensity + 1 раз], data},
+    ///     block[0] = {address[baseDataSize], stack[stackDensity], data[baseDataSize]},
+    ///     block[1] = {stack[stackDensity + 1 раз], data[baseDataSize]},
+    ///     block[2] = {stack[stackDensity + 1 раз], data[baseDataSize]},
     ///     ...
-    /// Блоки размещаются на ленте последовательно.
+    /// Блоки размещаются на ленте памяти последовательно.
     /// При смещении контекста через ShiftContext представления блоков смещаются соответственно
     /// </summary>
-    public class BFPtr
-    {
-        public readonly int baseDataSize;
-        public readonly BFstack stack;
-        public int blockSize => stack.stackDensity + 2; // + data + address 
-        private BFCompiler compiler;
+    //public class BFPtr
+    //{
+    //    public readonly int baseDataSize;
+    //    public readonly BFstack stack;
+    //    public int blockSize => stack.stackDensity + baseDataSize * 2; // + data + address 
+    //    private BFCompiler compiler;
 
-        public BFPtr(int baseDataSize, int stackDensity)
-        {
-            this.baseDataSize = baseDataSize;
-            stack = new BFstack(this, stackDensity);
-            compiler = new BFCompiler();
-        }
+    //    public BFPtr(int baseDataSize, int stackDensity)
+    //    {
+    //        this.baseDataSize = baseDataSize;
+    //        stack = new BFstack(this, stackDensity);
+    //        compiler = new BFCompiler();
+    //    }
+    //}
 
-        public class BFstackData : BFdata, IDisposable
-        {
-            private readonly BFstack stack;
-            public bool disposed { get; private set; }
+    //public abstract class BFSpace()
+    //{
+    //    public abstract int CellPosByIdx(int idx);
+    //}
 
-            public BFstackData(BFPtr bfp) : 
-                base(bfp.compiler, bfp.stack.Alloc(), bfp.baseDataSize) 
-            {
-                stack = bfp.stack;
-            }
+    //public abstract class BFContext
+    //{
+     
+    //}
 
-            public void Dispose()
-            {
-                Dispose(true);
-                GC.SuppressFinalize(this);
-            }
+    //public abstract class BFType
+    //{
 
-            protected virtual void Dispose(bool disposing)
-            {
-                if (disposed) return;
+    //}
 
-                if (disposing)
-                    stack.Free(this);
+    //public class BFVar : List<BFVar>
+    //{
+    //    public virtual int size
+    //    {
+    //        get
+    //        {
+    //            int size = 0;
+    //            foreach (BFVar t in this)
+    //                size += t.size;
+    //            return size;
+    //        }
+    //    }
 
-                disposed = true;
-            }
+    //    public readonly int pos;
+    //}
 
-            ~BFstackData() => Dispose(false);
-        }
+    ///// <summary>
+    ///// Стек локальных переменных для функций адресации в рамках одного контекста.
+    ///// </summary>
+    //public class BFstack : BFSpace
+    //{
+    //    public int depth { get; private set; }
 
-        /// <summary>
-        /// Стек локальных переменных для функций адресации в рамках одного контекста.
-        /// </summary>
-        public class BFstack
-        {
-            public readonly int stackDensity;
-            public int size { get; private set; }
+    //    protected BFContext context;
 
-            protected SortedSet<int> pendingDispose;
-            protected BFPtr compiler;
+    //    public BFstack(BFContext context, )
+    //    {
+    //        this.context = context;
+    //    }
 
-            public BFstack(BFPtr compiler, int stackDensity)
-            {
-                this.compiler = compiler;
-                this.stackDensity = stackDensity;
+    //    /*protected int CalcCellPos(int stackPos)
+    //    {
+    //        if (stackPos < stackDensity + host.baseDataSize) //skip address field
+    //            return stackPos + host.baseDataSize;
 
-                pendingDispose = new SortedSet<int>();//reverse order
-            }
+    //        int remainingIndex = stackPos - stackDensity;
+    //        int blockNumber = remainingIndex / (stackDensity + host.baseDataSize);
+    //        int positionInBlock = remainingIndex % (stackDensity + host.baseDataSize);
 
-            protected int CalcCellPos(int stackPos)
-            {
-                if (stackPos < stackDensity)
-                    return stackPos + 1;
+    //        return host.blockSize + blockNumber * host.blockSize + positionInBlock;
+    //    }*/
 
-                int remainingIndex = stackPos - stackDensity;
-                int blockNumber = remainingIndex / (stackDensity + 1);
-                int positionInBlock = remainingIndex % (stackDensity + 1);
+    //    public int Alloc(BFVar var)
+    //    {
+    //        int idx = CellPosByIdx(type.size);
+    //        depth += type.size;
 
-                return (stackDensity + 2) + blockNumber * (stackDensity + 2) + positionInBlock;
-            }
+    //        return idx;
+    //    }
 
-            public int Alloc()
-            {
-                tryFreePending();
-
-                int pos = CalcCellPos(size);
-                size++;
-                return pos;
-            }
-
-            public void Free(BFstackData data)
-            {
-                if (data.disposed)
-                    throw new ObjectDisposedException(
-                        nameof(data),
-                        $"Attempt to free already disposed BFstackData object with position {data.pos}");
-
-                if (data.pos == CalcCellPos(size - 1))
-                    size--;
-                else
-                    pendingDispose.Add(data.pos);
-            }
-
-            protected bool tryFreePending()
-            {
-                while (pendingDispose.Count > 0)
-                {
-                    int pos = pendingDispose.Max;
-                    int expectedPos = CalcCellPos(size - 1);
-
-                    if (pos != expectedPos)
-                        throw new InvalidOperationException(
-                            $"Stack corruption: cannot free pos {pos}, expected {expectedPos} (size={size - 1})"
-                        );
-
-                    pendingDispose.Remove(pos);
-                    size--;
-                }
-                return true;
-            }
-        }
-    }
+    //    public void Free(BFVar var)
+    //    {
+    //        depth -= type.size;
+    //    }
+    //}
 }
