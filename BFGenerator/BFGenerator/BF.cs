@@ -5,12 +5,10 @@ namespace BFGenerator
     {
         private readonly StringBuilder bf;
         private int PosInContext;
-        private BFContext context;
 
-        public BFBuilder(BFContext context)
+        public BFBuilder()
         {
             bf = new StringBuilder();
-            this.context = context;
         }
 
         private void BFPut_(char bfInst)
@@ -35,15 +33,13 @@ namespace BFGenerator
             PosInContext = dest;
         }
 
-        public void BFShiftContext(int shift, BFContext to)
+        public void BFShiftContext(int shift)
         {
             char command = shift > 0 ? '>' : '<';
             int absShift = shift >= 0 ? shift : -shift;
 
             for (int i = 0; i < absShift; i++)
                 BFPut_(command);
-
-            context = to;
         }
 
         public void BFPut(char bfInst)

@@ -2,44 +2,55 @@
 {
     public class BFIR : List<IRInst>
     {
-        public readonly BFContext baseContext;
-
-        public BFIR(BFContext baseContext) 
-        { 
-            this.baseContext = baseContext;
-        }
-
         public string Compile()
         {
-            BFBuilder bFBuilder = new BFBuilder(baseContext);
-            foreach(var inst in this)
+            BFBuilder bFBuilder = new BFBuilder();
+            foreach (var inst in this)
                 inst.Compile(bFBuilder);
             return bFBuilder.ToString();
         }
     }
 
-
     public interface IRInst { public void Compile(BFBuilder host); }
-    public class Plus : IRInst { public void Compile(BFBuilder host) => host.BFPut('+'); }
-    public class Minus : IRInst { public void Compile(BFBuilder host) => host.BFPut('-'); }
     public class Print : IRInst { public void Compile(BFBuilder host) => host.BFPut('.'); }
     public class Read : IRInst { public void Compile(BFBuilder host) => host.BFPut(','); }
+    public class LoopStart : IRInst { public void Compile(BFBuilder host) => host.BFPut('['); }
+    public class LoopEnd : IRInst { public void Compile(BFBuilder host) => host.BFPut(']'); }
 
-    public class While : List<IRInst>, IRInst
+    public class Plus : IRInst
     {
+        int val;
+        public Plus(int val = 1)
+        {
+            this.val = val;
+        }
+
         public void Compile(BFBuilder host)
         {
-            host.BFPut('[');
-            foreach (var inst in this)
-                inst.Compile(host);
-            host.BFPut(']');
+            for (int i = 0; i < val; i++)
+                host.BFPut('+');
+        }
+    }
+
+    public class Minus : IRInst
+    {
+        int val;
+        public Minus(int val = 1)
+        {
+            this.val = val;
+        }
+
+        public void Compile(BFBuilder host)
+        {
+            for (int i = 0; i < val; i++)
+                host.BFPut('-');
         }
     }
 
     public class MoveTo : IRInst
     {
         public readonly BFMemoryDescriptor descriptor;
-        public readonly int pos; // смещение внутри блока
+        public readonly int pos;
 
         public MoveTo(BFMemoryDescriptor descriptor, int pos = 0)
         {
@@ -54,17 +65,15 @@
         }
     }
 
-    public class ShiftTo : IRInst
+    public class ShiftContext : IRInst
     {
-        public readonly BFContext context;
         public readonly int shift;
 
-        public ShiftTo(BFContext context, int shift)
+        public ShiftContext(int shift)
         {
-            this.context = context;
             this.shift = shift;
         }
 
-        public void Compile(BFBuilder host) => host.BFShiftContext(shift, context);
+        public void Compile(BFBuilder host) => host.BFShiftContext(shift);
     }
 }
