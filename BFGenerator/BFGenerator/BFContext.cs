@@ -1,41 +1,61 @@
-﻿namespace BFGenerator
+﻿using System.Linq;
+
+namespace BFGenerator
 {
+    public enum AllocatorKind
+    {
+        Stack,
+        Data,
+        Address
+    }
+
     public abstract class BFContext
     {
-        public readonly BFAllocator stack, data, address;
+        private readonly BFAllocator[] allocators;
 
         public BFContext()
         {
-            stack = new BFAllocator();
-            data = new BFAllocator();
-            address = new BFAllocator();
+            int count = Enum.GetValues<AllocatorKind>().Length;
+            allocators = new BFAllocator[count];
+            allocators[(int)AllocatorKind.Stack] = new BFAllocator();
+            allocators[(int)AllocatorKind.Data] = new BFAllocator();
+            allocators[(int)AllocatorKind.Address] = new BFAllocator();
         }
 
-        public int Resolve(BFAllocator alloc, int ind)
+        public BFAllocator this[AllocatorKind kind] => allocators[(int)kind];
+
+        public int Resolve(BFMemoryDescriptor descriptor, int logicalIndex)
         {
-            if (stack.Equals(alloc))
-                return ResolveStack(ind);
-            if (data.Equals(alloc))
-                return ResolveData(ind);
-            if (address.Equals(alloc))
-                return ResolveAddress(ind);
-
-            throw new Exception("undefined allocator");
+            if (descriptor.Context != this)
+                throw new InvalidOperationException("Descriptor belongs to a different context.");
+            if(!allocators.Contains(descriptor.Allocator))
+                throw new InvalidOperationException("Descriptor belongs to invalid allocator.");
+            return ResolvePhysical((AllocatorKind)Array.IndexOf(allocators, descriptor.Allocator), descriptor.BaseIndex + logicalIndex);
         }
 
-        public abstract int ResolveStack(int ind);
-        public abstract int ResolveData(int ind);
-        public abstract int ResolveAddress(int ind);
+        protected abstract int ResolvePhysical(AllocatorKind kind, int logicalIndex);
+
+        public BFMemoryDescriptor Alloc(AllocatorKind kind, int size)
+        {
+            var allocator = this[kind];
+            int index = allocator.Alloc(size);
+            return new BFMemoryDescriptor(this, allocator, index, size);
+        }
+
+        public void Free(BFMemoryDescriptor descriptor)
+        {
+            if (descriptor.Context != this)
+                throw new InvalidOperationException("Descriptor belongs to a different context.");
+            descriptor.Allocator.Free(descriptor.BaseIndex, descriptor.Size);
+        }
     }
 
     public class BFAllocator
     {
-        private int size;
         private readonly SortedDictionary<int, int> activeBlocks = new SortedDictionary<int, int>();
         private readonly SortedDictionary<int, int> pendingFree = new SortedDictionary<int, int>();
 
-        public int Size => size;
-        public int ActiveBlockCount => activeBlocks.Count;
+        public int Size { get; private set; }
 
         public int Alloc(int allocSize)
         {
@@ -43,8 +63,8 @@
                 throw new InvalidOperationException(
                     "Cannot allocate: there are pending frees. Ensure all freed blocks are properly released before allocating.");
 
-            int index = size;
-            size += allocSize;
+            int index = Size;
+            Size += allocSize;
             activeBlocks[index] = allocSize;
             return index;
         }
@@ -61,9 +81,9 @@
 
             activeBlocks.Remove(logicalIndex);
 
-            int expectedTopIndex = size - blockSize;
+            int expectedTopIndex = Size - blockSize;
             if (logicalIndex == expectedTopIndex)
-                size -= blockSize;
+                Size -= blockSize;
             else
                 pendingFree[logicalIndex] = blockSize;
 
@@ -73,15 +93,31 @@
                 int pendingIndex = last.Key;
                 int pendingSize = last.Value;
 
-                int newExpectedTop = size - pendingSize;
+                int newExpectedTop = Size - pendingSize;
                 if (pendingIndex == newExpectedTop)
                 {
                     pendingFree.Remove(pendingIndex);
-                    size -= pendingSize;
+                    Size -= pendingSize;
                 }
                 else
                     break;
             }
+        }
+    }
+
+    public class BFMemoryDescriptor
+    {
+        public BFContext Context { get; }
+        public BFAllocator Allocator { get; }
+        public int BaseIndex { get; }
+        public int Size { get; }
+
+        public BFMemoryDescriptor(BFContext context, BFAllocator allocator, int baseIndex, int size)
+        {
+            Context = context;
+            Allocator = allocator;
+            BaseIndex = baseIndex;
+            Size = size;
         }
     }
 }

@@ -4,9 +4,8 @@
     {
         public virtual int size { get; protected set; }
         public int addr;
-        public BFAllocator space;
 
-        public BFData(BFAllocator space)
+        BFData(BFMemoryDescriptor descriptor, BFIR ir)
         {
             this.space = space;
             addr = space.Alloc(size);

@@ -25,9 +25,8 @@ namespace BFGenerator
                 bf.Append(bfInst);
         }
 
-        public void BFMoveTo(BFAllocator allocator, int dest)
+        public void BFMoveTo(int dest)
         {
-            dest = context.Resolve(allocator, dest);
             int move = dest - PosInContext;
             char command = move > 0 ? '>' : '<';
             int absMove = move >= 0 ? move : -move;
