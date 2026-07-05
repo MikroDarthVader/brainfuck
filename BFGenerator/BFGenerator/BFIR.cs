@@ -1,7 +1,8 @@
-﻿namespace BFGenerator
+﻿namespace BFG
 {
-    public class BFIR : List<IRInst>
+    internal class BFIR(BFContext? activeContext) : List<IRInst>
     {
+        public BFContext? ActiveContext = activeContext;
         public string Compile()
         {
             BFBuilder bFBuilder = new BFBuilder();
@@ -11,13 +12,13 @@
         }
     }
 
-    public interface IRInst { public void Compile(BFBuilder host); }
-    public class Print : IRInst { public void Compile(BFBuilder host) => host.BFPut('.'); }
-    public class Read : IRInst { public void Compile(BFBuilder host) => host.BFPut(','); }
-    public class LoopStart : IRInst { public void Compile(BFBuilder host) => host.BFPut('['); }
-    public class LoopEnd : IRInst { public void Compile(BFBuilder host) => host.BFPut(']'); }
+    internal interface IRInst { public void Compile(BFBuilder host); }
+    internal class Print : IRInst { public void Compile(BFBuilder host) => host.BFPut('.'); }
+    internal class Read : IRInst { public void Compile(BFBuilder host) => host.BFPut(','); }
+    internal class LoopStart : IRInst { public void Compile(BFBuilder host) => host.BFPut('['); }
+    internal class LoopEnd : IRInst { public void Compile(BFBuilder host) => host.BFPut(']'); }
 
-    public class Plus : IRInst
+    internal class Plus : IRInst
     {
         int val;
         public Plus(int val = 1)
@@ -27,12 +28,11 @@
 
         public void Compile(BFBuilder host)
         {
-            for (int i = 0; i < val; i++)
-                host.BFPut('+');
+            host.BFPut('+', val);
         }
     }
 
-    public class Minus : IRInst
+    internal class Minus : IRInst
     {
         int val;
         public Minus(int val = 1)
@@ -42,30 +42,37 @@
 
         public void Compile(BFBuilder host)
         {
-            for (int i = 0; i < val; i++)
-                host.BFPut('-');
+            host.BFPut('-', val);
         }
     }
 
-    public class MoveTo : IRInst
+    internal class MoveTo : IRInst
     {
-        public readonly BFMemoryDescriptor descriptor;
+        public readonly BFRootDescriptor descriptor;
         public readonly int pos;
+        public readonly Func<int>? shiftFromParentCxt;
 
-        public MoveTo(BFMemoryDescriptor descriptor, int pos = 0)
+        public MoveTo(BFRootDescriptor descriptor, int pos, Func<int>? shiftFromParentCxt)
         {
-            this.descriptor = descriptor;
+            var activeContext = descriptor.Context.IR.ActiveContext;
+            if (descriptor.Context != activeContext && shiftFromParentCxt == null)
+                throw new InvalidOperationException("Cannot generate MoveTo for a foreign descriptor without a context shift function.");
+
+            this.descriptor = new BFRootDescriptor(descriptor);
             this.pos = pos;
+            this.shiftFromParentCxt = shiftFromParentCxt;
         }
 
         public void Compile(BFBuilder host)
         {
-            int physicalAddress = descriptor.Context.Resolve(descriptor, pos);
+            // Чистый локальный адрес + сдвиг (если он есть)
+            int physicalAddress = descriptor.Context.Resolve(descriptor, pos) + (shiftFromParentCxt != null ? shiftFromParentCxt() : 0);
             host.BFMoveTo(physicalAddress);
         }
     }
 
-    public class ShiftContext : IRInst
+
+    internal class ShiftContext : IRInst
     {
         public readonly int shift;
 

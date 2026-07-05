@@ -1,10 +1,11 @@
-﻿namespace BFGenerator
+﻿
+using BFG;
+
+internal class Program
 {
-    internal class Program
+    static void Main(/*string[] args*/)
     {
-        static void Main(string[] args)
-        {
-            Console.WriteLine("Hello, World!");
-        }
+        var floatType = new BFFloatType(expoSize: 2, mantSize: 2);
+        Console.WriteLine($"Float size: {floatType.Size} cells");
     }
 }

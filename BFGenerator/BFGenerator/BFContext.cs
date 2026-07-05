@@ -1,20 +1,35 @@
-﻿namespace BFGenerator
+﻿namespace BFG
 {
     public enum AllocatorKind
     {
         Stack,
-        Data,
-        Address
+        Data
     }
 
-    public abstract class BFContext
+    /// <summary>
+    /// Dynamic memory context. Allocators are organised in repeating blocks
+    /// of (<see cref="dataDens"/> Data + <see cref="stackDens"/> Stack).
+    /// Logical indices are mapped linearly into this repeating layout.
+    /// </summary>
+    public class BFContext
     {
         private class BFAllocator
         {
-            private readonly SortedDictionary<int, int> activeBlocks = new SortedDictionary<int, int>();
-            private readonly SortedDictionary<int, int> pendingFree = new SortedDictionary<int, int>();
+            private readonly SortedDictionary<int, int> activeBlocks = [];
+            private readonly SortedDictionary<int, int> pendingFree = [];
 
-            public int Size { get; private set; }
+            private int _size;
+            public int MaxSize { get; private set; }
+            public int Size
+            {
+                get => _size;
+                private set
+                {
+                    _size = value;
+                    if (_size > MaxSize)
+                        MaxSize = _size;
+                }
+            }
 
             public int Alloc(int allocSize)
             {
@@ -64,81 +79,72 @@
             }
         }
 
-        private readonly BFAllocator[] allocators;
-        public readonly BFIR IR;
+        /// <summary>Stack cells per block.</summary>
+        public readonly int stackDens;
+        /// <summary>Data cells per block.</summary>
+        public readonly int dataDens;
+        /// <summary>Total cells per block.</summary>
+        public int BlockSize => stackDens + dataDens;
 
-        public BFContext(BFIR iR)
+        private readonly BFAllocator[] allocators;
+        /// <summary>Owning IR module.</summary>
+        internal readonly BFIR IR;
+
+        /// <summary>Current maximum sizes of the allocators (used by <see cref="BFRootDescriptor"/>).</summary>
+        public int[] MaxSize => allocators.Select(x => x.MaxSize).ToArray();
+
+        internal BFContext(BFIR ir, int stackDens = 1, int dataDens = 1)
         {
             int count = Enum.GetValues<AllocatorKind>().Length;
             allocators = new BFAllocator[count];
             allocators[(int)AllocatorKind.Stack] = new BFAllocator();
             allocators[(int)AllocatorKind.Data] = new BFAllocator();
-            allocators[(int)AllocatorKind.Address] = new BFAllocator();
-            IR = iR;
+
+            IR = ir;
+            this.stackDens = stackDens;
+            this.dataDens = dataDens;
         }
 
-        public int Resolve(BFMemoryDescriptor descriptor, int logicalIndex)
+        /// <summary>
+        /// Resolves a root (or transitional) descriptor to an absolute tape address.
+        /// </summary>
+        internal int Resolve(BFRootDescriptor descriptor, int logicalIndex)
         {
+            if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
+
             if (descriptor.Context != this)
-                throw new InvalidOperationException("Descriptor belongs to a different context.");
+                return descriptor.Context.Resolve(descriptor, logicalIndex);
             return ResolveAddr(descriptor.Allocator, descriptor.BaseIndex + logicalIndex);
         }
 
-        protected abstract int ResolveAddr(AllocatorKind kind, int logicalIndex);
 
-        public BFMemoryDescriptor Alloc(AllocatorKind kind, int size = 1)
+        private int ResolveAddr(AllocatorKind kind, int logicalIndex)
+        {
+            if (kind == AllocatorKind.Stack)
+                return (logicalIndex / stackDens) * BlockSize + logicalIndex % stackDens + dataDens;
+            else
+                return (logicalIndex / dataDens) * BlockSize + logicalIndex % dataDens;
+        }
+
+        /// <summary>
+        /// Allocates a block in the given allocator and returns a root descriptor.
+        /// </summary>
+        public BFRootDescriptor Alloc(AllocatorKind kind, int size = 1)
         {
             var allocator = allocators[(int)kind];
             int index = allocator.Alloc(size);
-            return new BFMemoryDescriptor(this, kind, index, size);
+            return new BFRootDescriptor(this, kind, index, size);
         }
 
-        public void Free(BFMemoryDescriptor descriptor)
+        /// <summary>
+        /// Frees a previously allocated root descriptor.
+        /// </summary>
+        public void Free(BFRootDescriptor descriptor)
         {
+            if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
             if (descriptor.Context != this)
                 throw new InvalidOperationException("Descriptor belongs to a different context.");
             allocators[(int)descriptor.Allocator].Free(descriptor.BaseIndex, descriptor.Size);
         }
     }
-
-    public class BFMemoryDescriptor : IDisposable
-    {
-        public BFContext Context { get; }
-        public AllocatorKind Allocator { get; }
-        public int BaseIndex { get; }
-        public int Size { get; }
-
-        public BFMemoryDescriptor(BFContext context, AllocatorKind allocator, int baseIndex, int size)
-        {
-            Context = context;
-            Allocator = allocator;
-            BaseIndex = baseIndex;
-            Size = size;
-        }
-
-        public BFCell this[int ind] => new BFCell(this, ind);
-
-        public override bool Equals(object? obj)
-        {
-            if (obj == null || !(obj is BFMemoryDescriptor)) return false;
-            BFMemoryDescriptor other = (BFMemoryDescriptor)obj;
-            return Context.Equals(other.Context) &&
-                (Allocator == other.Allocator) &&
-                (BaseIndex == other.BaseIndex) &&
-                (Size == other.Size);
-        }
-
-        public override int GetHashCode() => base.GetHashCode();
-
-        public void Dispose() { Context.Free(this); }
-
-        public BFCell[] ToArray()
-        {
-            BFCell[] array = new BFCell[Size];
-            for(int i = 0; i < Size; i++)
-                array[i] = this[i];
-            return array;
-        }
-    }
-
 }
