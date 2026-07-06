@@ -1,4 +1,4 @@
-﻿namespace BFG
+﻿namespace BFGen
 {
     /// <summary>
     /// Low‑level Brainfuck code emitter.

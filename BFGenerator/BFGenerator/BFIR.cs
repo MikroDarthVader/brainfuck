@@ -1,14 +1,26 @@
-﻿namespace BFG
+﻿namespace BFGen
 {
-    internal class BFIR(BFContext? activeContext) : List<IRInst>
+    internal class BFIR
     {
-        public BFContext? ActiveContext = activeContext;
+        public BFContext ActiveContext { get; private set; }
+
+        private List<IRInst> insts = new List<IRInst>();
+
+        public BFIR() => ActiveContext = new BFContext(this) { };
+
         public string Compile()
         {
             BFBuilder bFBuilder = new BFBuilder();
-            foreach (var inst in this)
+            foreach (var inst in insts)
                 inst.Compile(bFBuilder);
             return bFBuilder.ToString();
+        }
+
+        public void Add(IRInst inst)
+        {
+            insts.Add(inst);
+            if(inst is ShiftContext)
+                ActiveContext = (inst as ShiftContext)!.newContext ?? ActiveContext;
         }
     }
 
@@ -48,17 +60,17 @@
 
     internal class MoveTo : IRInst
     {
-        public readonly BFRootDescriptor descriptor;
+        public readonly BFVar descriptor;
         public readonly int pos;
         public readonly Func<int>? shiftFromParentCxt;
 
-        public MoveTo(BFRootDescriptor descriptor, int pos, Func<int>? shiftFromParentCxt)
+        public MoveTo(BFVar descriptor, int pos, Func<int>? shiftFromParentCxt)
         {
             var activeContext = descriptor.Context.IR.ActiveContext;
             if (descriptor.Context != activeContext && shiftFromParentCxt == null)
                 throw new InvalidOperationException("Cannot generate MoveTo for a foreign descriptor without a context shift function.");
 
-            this.descriptor = new BFRootDescriptor(descriptor);
+            this.descriptor = new BFVar(descriptor);
             this.pos = pos;
             this.shiftFromParentCxt = shiftFromParentCxt;
         }
@@ -74,13 +86,21 @@
 
     internal class ShiftContext : IRInst
     {
-        public readonly int shift;
+        public readonly Func<int> shiftFromParentCxt;
+        public readonly BFContext? newContext;
 
-        public ShiftContext(int shift)
+        public ShiftContext(int shift, BFContext? newContext = null)
         {
-            this.shift = shift;
+            shiftFromParentCxt = () => shift;
+            this.newContext = newContext;
         }
 
-        public void Compile(BFBuilder host) => host.BFShiftContext(shift);
+        public ShiftContext(Func<int> shift, BFContext? newContext = null)
+        {
+            shiftFromParentCxt = shift;
+            this.newContext = newContext;
+        }
+
+        public void Compile(BFBuilder host) => host.BFShiftContext(shiftFromParentCxt());
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace BFG
+﻿namespace BFGen
 {
     /// <summary>
     /// A single logical cell inside a memory block.
@@ -8,13 +8,13 @@
     public class BFCell
     {
         // Changed to RootDescriptor for direct access to Context and cxtShift
-        private readonly BFRootDescriptor descriptor;
+        private readonly BFVar descriptor;
         private readonly int offset;
 
         /// <summary>
         /// Creates a cell for the given root descriptor at the specified offset.
         /// </summary>
-        public BFCell(BFRootDescriptor descriptor, int offset = 0)
+        public BFCell(BFVar descriptor, int offset = 0)
         {
             this.descriptor = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
             this.offset = offset;
@@ -47,6 +47,21 @@
         {
             MoveToThis();
             IR.Add(new Minus(val));
+        }
+
+        /// <summary>
+        /// Changes this cell's value by the given delta.
+        /// O(abs(delta)).
+        /// </summary>
+        public void Change(int delta)
+        {
+            if (delta == 0) return;
+
+            MoveToThis();
+            if (delta > 0)
+                IR.Add(new Plus(delta));
+            else
+                IR.Add(new Minus(-delta));
         }
 
         /// <summary>
@@ -84,8 +99,31 @@
         {
             While(() =>
             {
+                Init();
                 code();
-                Init();   // clear after body – loop exits after one iteration
+            });
+        }
+
+
+        /// <summary>
+        /// Not self Safe
+        /// O(n)
+        /// </summary>
+        /// <param name="s1"></param>
+        /// <param name="codeIf"></param>
+        /// <param name="codeElse"></param>
+        public void IfElse(Action codeIf, Action codeElse)
+        {
+            var tmp = Context.IR.ActiveContext.Alloc(AllocatorKind.Stack, 1);
+            tmp[0]!.Init(1);
+            If(() =>
+            {
+                codeIf();
+                tmp.Init();
+            });
+            tmp[0]!.If(() =>
+            {
+                codeElse();
             });
         }
 
@@ -139,7 +177,7 @@
         {
             to = to.Where(dest => dest != null && !Equals(dest)).ToArray();
             // Allocate a temporary cell that will hold the value during copy
-            using var tempDesc = Context.Alloc(AllocatorKind.Stack);
+            using var tempDesc = Context.IR.ActiveContext.Alloc(AllocatorKind.Stack);
             var tmp = tempDesc[0]!;
 
             to = to.Append(tmp).ToArray();   // include temp in targets
@@ -160,7 +198,7 @@
         public void CompareTo(BFCell other)
         {
             // Three temporary cells for the algorithm
-            using var locals = Context.Alloc(AllocatorKind.Stack, 3);
+            using var locals = Context.IR.ActiveContext.Alloc(AllocatorKind.Stack, 3);
             BFCell[] tmp = locals.ToArray();
             var flagB = tmp[0];   // 1 if other may be non‑zero in current iteration
             var counterB = tmp[1];   // counts successful decrements of other

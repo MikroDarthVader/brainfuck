@@ -1,10 +1,10 @@
-﻿namespace BFG
+﻿namespace BFGen
 {
     /// <summary>
     /// Root descriptor – has context and optional context shift.
     /// Provides cell access and block operations.
     /// </summary>
-    public class BFRootDescriptor : IDisposable
+    public class BFVar : IDisposable
     {
         /// <summary>Owning context.</summary>
         public BFContext Context { get; private set; }
@@ -17,16 +17,12 @@
         /// <summary>Optional context shift for cross-context access.</summary>
         internal Func<int>? cxtShift;
 
-        internal bool isTransitional
-        {
-            get => cxtShift != null;
-            set => cxtShift = value ? (cxtShift ?? (() => 0)) : null;
-        }
+        internal bool isTransitional => cxtShift != null;
 
         /// <summary>
         /// Creates a root descriptor from an allocator.
         /// </summary>
-        internal BFRootDescriptor(BFContext context, AllocatorKind allocator, int baseIndex, int size)
+        internal BFVar(BFContext context, AllocatorKind allocator, int baseIndex, int size)
         {
             if (size <= 0) throw new ArgumentException("Size must be > 0");
             BaseIndex = baseIndex;
@@ -39,7 +35,7 @@
         /// <summary>
         /// Copy constructor with offset and optional size.
         /// </summary>
-        internal BFRootDescriptor(BFRootDescriptor other, int offset = 0, int size = 0)
+        internal BFVar(BFVar other, int offset = 0, int size = 0)
         {
             if (size < 0) throw new ArgumentException("Size must be >= 0");
 
@@ -62,7 +58,7 @@
         /// <summary>
         /// Private constructor for applying a context shift function.
         /// </summary>
-        private BFRootDescriptor(BFRootDescriptor other, Func<int> cxtShift)
+        private BFVar(BFVar other, Func<int> cxtShift)
         {
             BaseIndex = other.BaseIndex;
             Size = other.Size;
@@ -72,15 +68,15 @@
         }
 
         /// <summary>Returns a new descriptor with an additional context shift function.</summary>
-        internal BFRootDescriptor ApplyShift(Func<int> shift) => new BFRootDescriptor(this, shift);
+        internal BFVar ApplyShift(Func<int> shift) => new BFVar(this, shift);
         /// <summary>Returns a new descriptor with an additional constant context shift.</summary>
-        internal BFRootDescriptor ApplyShift(int shift) => new BFRootDescriptor(this, () => shift);
+        internal BFVar ApplyShift(int shift) => new BFVar(this, () => shift);
 
         /// <summary>
         /// Returns a new root descriptor for a slice at the given offset with the specified size.
         /// </summary>
-        internal BFRootDescriptor Offset(int offset, int size) =>
-            new BFRootDescriptor(this, offset, size);
+        internal BFVar Offset(int offset, int size) =>
+            new BFVar(this, offset, size);
 
         // ---- cell access ----
         public BFCell? this[int index]
@@ -94,7 +90,7 @@
 
         // ---- block operations ----
         /// <summary>Copies this block to one or more root descriptors.</summary>
-        public void CopyTo(params BFRootDescriptor[] to)
+        public void CopyTo(params BFVar[] to)
         {
             for (int i = 0; i < Size; i++)
             {
@@ -123,7 +119,7 @@
         }
 
         /// <summary>Moves this block (clearing source) to root descriptors.</summary>
-        public void MoveTo(params BFRootDescriptor[] to)
+        public void MoveTo(params BFVar[] to)
         {
             int maxSize = 0;
             foreach (var t in to) if (t.Size > maxSize) maxSize = t.Size;
@@ -172,7 +168,7 @@
         /// Replaces the contents of this descriptor with those of <paramref name="source"/>.
         /// Used to rebind user descriptors after a context switch.
         /// </summary>
-        internal void Rebind(BFRootDescriptor source)
+        internal void Rebind(BFVar source)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
             BaseIndex = source.BaseIndex;
@@ -188,7 +184,7 @@
         }
 
         public override bool Equals(object? obj) =>
-            obj is BFRootDescriptor other &&
+            obj is BFVar other &&
             Context == other.Context &&
             Allocator == other.Allocator &&
             BaseIndex == other.BaseIndex &&

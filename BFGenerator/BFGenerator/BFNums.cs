@@ -1,4 +1,4 @@
-﻿namespace BFG
+﻿namespace BFGen
 {
     public class BFUIntType : BFType
     {
@@ -16,7 +16,7 @@
             Neg = RegisterField(new BFUIntType(addrSize));
         }
 
-        public void Normalize(BFRootDescriptor desc)
+        public void Normalize(BFVar desc)
         {
             var posDesc = Pos.From(desc);
             var negDesc = Neg.From(desc);

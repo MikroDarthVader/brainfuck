@@ -1,4 +1,4 @@
-﻿namespace BFG
+﻿namespace BFGen
 {
     /// <summary>
     /// Abstract type descriptor. Knows its size and internal field layout.
@@ -47,7 +47,7 @@
         /// Creates a root descriptor by applying this type's layout to the given root.
         /// For root types, creates a descriptor directly. For fields, delegates to the skeleton's <see cref="ChildDescriptor.From"/>.
         /// </summary>
-        public BFRootDescriptor From(BFRootDescriptor rootDesc)
+        public BFVar From(BFVar rootDesc)
         {
             int totalOffset = 0;
             BFType? current = this;
@@ -56,13 +56,13 @@
                 totalOffset += current.offsetInParent;
                 current = current.parentType;
             }
-            return new BFRootDescriptor(rootDesc, totalOffset, Size);
+            return new BFVar(rootDesc, totalOffset, Size);
         }
 
         /// <summary>
         /// Recursively copies data from source to target, respecting the type's structure.
         /// </summary>
-        public void Copy(BFRootDescriptor source, BFRootDescriptor target)
+        public void Copy(BFVar source, BFVar target)
         {
             if (childFields.Count == 0)
             {
@@ -82,7 +82,7 @@
         /// <summary>
         /// Recursively moves data from source to target (source is cleared).
         /// </summary>
-        public void Move(BFRootDescriptor source, BFRootDescriptor target)
+        public void Move(BFVar source, BFVar target)
         {
             if (childFields.Count == 0)
             {

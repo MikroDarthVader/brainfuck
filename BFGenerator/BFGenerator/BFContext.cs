@@ -1,4 +1,4 @@
-﻿namespace BFG
+﻿namespace BFGen
 {
     public enum AllocatorKind
     {
@@ -90,8 +90,11 @@
         /// <summary>Owning IR module.</summary>
         internal readonly BFIR IR;
 
-        /// <summary>Current maximum sizes of the allocators (used by <see cref="BFRootDescriptor"/>).</summary>
-        public int[] MaxSize => allocators.Select(x => x.MaxSize).ToArray();
+        public readonly int ID;
+        private static int _ids = 0;
+
+        /// <summary>Current maximum sizes of the allocators .</summary>
+        public int MaxSize => allocators.Sum(x => x.MaxSize);
 
         internal BFContext(BFIR ir, int stackDens = 1, int dataDens = 1)
         {
@@ -103,12 +106,14 @@
             IR = ir;
             this.stackDens = stackDens;
             this.dataDens = dataDens;
+            ID = _ids;
+            _ids++;
         }
 
         /// <summary>
         /// Resolves a root (or transitional) descriptor to an absolute tape address.
         /// </summary>
-        internal int Resolve(BFRootDescriptor descriptor, int logicalIndex)
+        internal int Resolve(BFVar descriptor, int logicalIndex)
         {
             if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
 
@@ -129,17 +134,17 @@
         /// <summary>
         /// Allocates a block in the given allocator and returns a root descriptor.
         /// </summary>
-        public BFRootDescriptor Alloc(AllocatorKind kind, int size = 1)
+        public BFVar Alloc(AllocatorKind kind, int size = 1)
         {
             var allocator = allocators[(int)kind];
             int index = allocator.Alloc(size);
-            return new BFRootDescriptor(this, kind, index, size);
+            return new BFVar(this, kind, index, size);
         }
 
         /// <summary>
         /// Frees a previously allocated root descriptor.
         /// </summary>
-        public void Free(BFRootDescriptor descriptor)
+        public void Free(BFVar descriptor)
         {
             if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
             if (descriptor.Context != this)
