@@ -33,9 +33,29 @@
 
             public int Alloc(int allocSize)
             {
-                if (pendingFree.Count > 0)
-                    throw new InvalidOperationException(
-                        "Cannot allocate: there are pending frees. Ensure all freed blocks are properly released before allocating.");
+                if (allocSize <= 0)
+                    throw new ArgumentException("Allocation size must be > 0");
+
+                foreach (var kvp in pendingFree)
+                {
+                    int freeIndex = kvp.Key;
+                    int freeSize = kvp.Value;
+
+                    if (freeSize >= allocSize)
+                    {
+                        pendingFree.Remove(freeIndex);
+
+                        if (freeSize > allocSize)
+                        {
+                            int remainderIndex = freeIndex + allocSize;
+                            int remainderSize = freeSize - allocSize;
+                            pendingFree[remainderIndex] = remainderSize;
+                        }
+
+                        activeBlocks[freeIndex] = allocSize;
+                        return freeIndex;
+                    }
+                }
 
                 int index = Size;
                 Size += allocSize;
@@ -55,11 +75,23 @@
 
                 activeBlocks.Remove(logicalIndex);
 
-                int expectedTopIndex = Size - blockSize;
-                if (logicalIndex == expectedTopIndex)
-                    Size -= blockSize;
-                else
-                    pendingFree[logicalIndex] = blockSize;
+                pendingFree[logicalIndex] = blockSize;
+
+                var keys = pendingFree.Keys.ToList();
+                for (int i = 0; i < keys.Count - 1; i++)
+                {
+                    int currentIdx = keys[i];
+                    int currentSize = pendingFree[currentIdx];
+                    int nextIdx = keys[i + 1];
+
+                    if (currentIdx + currentSize == nextIdx)
+                    {
+                        pendingFree[currentIdx] = currentSize + pendingFree[nextIdx];
+                        pendingFree.Remove(nextIdx);
+                        keys.RemoveAt(i + 1);
+                        i--;
+                    }
+                }
 
                 while (pendingFree.Count > 0)
                 {
@@ -67,8 +99,7 @@
                     int pendingIndex = last.Key;
                     int pendingSize = last.Value;
 
-                    int newExpectedTop = Size - pendingSize;
-                    if (pendingIndex == newExpectedTop)
+                    if (pendingIndex + pendingSize == Size)
                     {
                         pendingFree.Remove(pendingIndex);
                         Size -= pendingSize;
@@ -78,6 +109,7 @@
                 }
             }
         }
+
 
         /// <summary>Stack cells per block.</summary>
         public readonly int stackDens;

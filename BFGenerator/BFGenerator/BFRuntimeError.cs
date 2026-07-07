@@ -6,21 +6,24 @@
     /// </summary>
     public class BFRuntimeError
     {
+
+        public enum ErrCode
+        {
+            OK,
+            ERR_SAME_PTR
+        }
         /// <summary>
         /// Emits a runtime crash trap. Prints the error code and locks the execution thread.
         /// </summary>
-        public BFRuntimeError(BFContext context, string error)
+        public BFRuntimeError(BFContext context, ErrCode error)
         {
             var ir = context.IR;
 
             var errorCellDesc = context.Alloc(AllocatorKind.Stack, 1);
             var errorCell = errorCellDesc[0]!;
 
-            foreach (var c in error)
-            {
-                errorCell.Init((byte)c);
-                errorCell.Print();
-            }
+            errorCell.Init((byte)error);
+            errorCell.Print();
 
             errorCell.While(() => {});
         }
