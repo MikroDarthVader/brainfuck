@@ -4,102 +4,57 @@ class Program
 {
     static void Main(string[] args)
     {
-        var bfg = new BFG(1, 1, 1);
-        BFVar x = bfg.Context.Alloc(AllocatorKind.Data, 1);
-        x[0]!.Init(3);
-        BFVar y = bfg.Context.Alloc(AllocatorKind.Stack, 1);
-        y[0]!.Init(2);//2
-        /*bfg.Go(x);
-        x = bfg.Context.Alloc(AllocatorKind.Data, 1);
-        x[0]!.Init(6);
-        bfg.Go(x);
-        x = bfg.Context.Alloc(AllocatorKind.Data, 1);
-        x[0]!.Init(2);
-        bfg.Go(x);*/
+        var bfg = new BFG(2, 1, 1);
 
+        var addr = bfg.Context.Alloc(AllocatorKind.Data, 2);
+        var a = bfg.Context.Alloc(AllocatorKind.Data, 1);
+        a[0].Init(71);
+        a[0].Print();
+        addr[0].Init(2);
+        addr[1].Init(3);
+        foreach (var c in addr.ToArray())
+            c.Print();
 
-        bfg.Go(x, y);
+        bfg.Go(addr);
+        var addr1 = bfg.Context.Alloc(AllocatorKind.Stack, 2);
+        addr1[0].Init(1);
+        addr1[1].Init(0);
+        foreach (var c in addr1.ToArray())
+            c.Print();
 
-        y[0]!.Plus(1);
-        y[0]!.Print();//3
-        x = bfg.Context.Alloc(AllocatorKind.Stack, 1);
-        x[0]!.Init(11);
+        bfg.Go(addr1);
+        addr1 = bfg.Context.Alloc(AllocatorKind.Stack, 2);
+        addr1[0].Init(111);
+        addr1[1].Init(11);
+        foreach (var c in addr1.ToArray())
+            c.Print();
 
-        bfg.Go(x, y);
+        bfg.Go(addr1);
+        var e = bfg.Context.Alloc(AllocatorKind.Stack, 1);
+        e[0].Init(42);
+        e[0].Print();
 
-        y[0]!.Plus(1);
-        y[0]!.Print();//4
-        x = bfg.Context.Alloc(AllocatorKind.Stack, 1);
-        x[0]!.Init(5);
+        bfg.Go(null, e);
 
-        bfg.Go(x, y);
+        a[0].Print();
+        e[0].Change(-15);
+        e[0].Print();
+        addr[0].Print();
+        addr[1].Print();
 
-        y[0]!.Plus(1);
-        y[0]!.Print();//5
-
-        bfg.Go(null, y);
-
-        y[0]!.Plus(1);
-        y[0]!.Print();//6
-
-        Console.WriteLine(bfg.Dump());
-        ExecuteBF(bfg.Compile());
+        Run(bfg);
     }
 
-    static void ExecuteBF(string code)
+    static void Run(BFG bfg)
     {
-        byte[] tape = new byte[30000];
-        int ptr = 0;
-        int codeIdx = 0;
+        var code = bfg.Compile();
+        /*Console.WriteLine(bfg.Dump());
 
-        Console.WriteLine("=== GENERATED BRAINFUCK CODE ===");
-        Console.WriteLine(code);
-        Console.WriteLine("================================\n");
+        Console.WriteLine("=== CODE GENERATED ===");
+        Console.WriteLine(code);*/
 
-        while (codeIdx < code.Length)
-        {
-            char cmd = code[codeIdx];
-            if (cmd == '>') ptr++;
-            else if (cmd == '<') ptr--;
-            else if (cmd == '+') tape[ptr]++;
-            else if (cmd == '-') tape[ptr]--;
-            else if (cmd == '.') Console.Write($"[OUT:{tape[ptr]}] "); // выводим маркер вывода
-            else if (cmd == ',') tape[ptr] = (byte)Console.Read();
-            else if (cmd == '[' && tape[ptr] == 0)
-            {
-                int depth = 1;
-                while (depth > 0)
-                {
-                    codeIdx++;
-                    if (code[codeIdx] == '[') depth++;
-                    if (code[codeIdx] == ']') depth--;
-                }
-            }
-            else if (cmd == ']' && tape[ptr] != 0)
-            {
-                int depth = 1;
-                while (depth > 0)
-                {
-                    codeIdx--;
-                    if (code[codeIdx] == ']') depth++;
-                    if (code[codeIdx] == '[') depth--;
-                }
-            }
-            codeIdx++;
-        }
-
-        Console.WriteLine("\n--- EXECUTION FINISHED ---");
-        Console.WriteLine($"Final ptr position: {ptr}");
-        Console.WriteLine("Non-zero tape cells:");
-        for (int i = 0; i < tape.Length; i++)
-        {
-            if (tape[i] != 0)
-            {
-                Console.WriteLine($"  [{i}] = {tape[i]}");
-            }
-        }
-        Console.WriteLine("--------------------------");
+        var vm = new BFDiagnostics(code, BFIOFormat.RawNumeric);
+        Console.WriteLine("\n=== DIAGNOSTIC VM WINDOW ===");
+        vm.Execute();
     }
-
-
 }

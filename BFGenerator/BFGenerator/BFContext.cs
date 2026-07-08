@@ -157,7 +157,7 @@
 
         private int ResolveAddr(AllocatorKind kind, int logicalIndex)
         {
-            if (kind == AllocatorKind.Stack)
+            if (kind == AllocatorKind.Data)
                 return (logicalIndex / stackDens) * BlockSize + logicalIndex % stackDens + dataDens;
             else
                 return (logicalIndex / dataDens) * BlockSize + logicalIndex % dataDens;

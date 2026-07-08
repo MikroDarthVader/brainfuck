@@ -62,13 +62,13 @@
             else
             {
                 if (ir.ActiveContext == staticCxt)
-                    throw new Exception("TODO: description");
+                    throw new InvalidOperationException("Execution State Violation: Attempted to perform a static rollback transition (Go(null)), but the compiler is already operating inside the root static context. Ensure you only return to static territory from an active dynamic frame.");
                 GoByPtr(addrDesc, moveFrom);
                 GoStatic(moveFrom);
             }
         }
 
-        public void GoStatic(List<BFVar> moveFrom)
+        private void GoStatic(List<BFVar> moveFrom)
         {
             foreach (BFVar desc in moveFrom)
             {
@@ -112,8 +112,8 @@
                 }
             }
 
-            var isFirstStep = flags[0]!;
-            var isFollowUp = flags[1]!;
+            var isFirstStep = flags[0];
+            var isFollowUp = flags[1];
             isFirstStep.Init(1);
             isFollowUp.Init(0);
 
@@ -140,65 +140,50 @@
 
                 var doStep = (int _step) =>
                 {
-                    addr[i]!.Change(_step > 0 ? 1 : -1);
+                    addr[i].Change(_step > 0 ? 1 : -1);
 
                     isFollowUp.Init(1);
 
                     isFirstStep.If(() =>
                     {
-                        /*isFirstStep.Plus(80);
-                        isFirstStep.Print();
-                        isFirstStep.Minus(80);*/
                         MoveData(moveFrom, moveTo, _step);
-
                         ir.Add(new ShiftContext(_step));
-                        
                         isFollowUp.Init(0);
                     });
 
                     isFollowUp.If(() =>
                     {
                         MoveData(moveTo.Select(x => x.ApplyShift(0)).ToList(), moveTo, _step);
-
-                        /*isFollowUp.Plus(92);
-                        isFollowUp.Print();
-                        isFollowUp.Minus(92);*/
-
                         ir.Add(new ShiftContext(_step));
                     });
 
-                    /*isFirstStep.Plus(85);
-                    isFirstStep.Print();
-                    isFirstStep.Minus(85);*/
+                    /*addr[0]!.Plus(100); ++++----..,[>>+<]-----
+                    addr[0]!.Print();
+                    addr[0]!.Minus(100);*/
                 };
 
                 if (addrDest == null)
                 {
-                    addr[i]!.While(() => { doStep(-1); });
-                    continue;
+                    addr[i].While(() => { doStep(-step); });
                 }
-
-                if (!moveFromZero)
+                else
                 {
-                    var left = movementType.Neg.From(movement)[i]!;
-                    left.While(() =>
+                    if (!moveFromZero)
                     {
-                        left.Minus();
-                        /*left.Plus(10);
-                        left.Print();
-                        left.Minus(10);*/
-                        doStep(-step);
+                        var left = movementType.Neg.From(movement)[i];
+                        left.While(() =>
+                        {
+                            left.Minus();
+                            doStep(-step);
+                        });
+                    }
+                    var right = movementType.Pos.From(movement)[i];
+                    right.While(() =>
+                    {
+                        right.Minus();
+                        doStep(step);
                     });
                 }
-                var right = movementType.Pos.From(movement)[i]!;
-                right.While(() =>
-                {
-                    right.Minus();
-                    /*right.Plus(20);
-                    right.Print();
-                    right.Minus(20);*/
-                    doStep(step);
-                });
             }
 
             isFirstStep.If(() =>
@@ -206,8 +191,9 @@
                 new BFRuntimeError(Context, BFRuntimeError.ErrCode.ERR_SAME_PTR);
             });
 
-            //foreach (var desc in moveFrom)
-            //    desc.Dispose();
+            foreach (var desc in moveFrom)
+                (desc.Parent ?? desc).Dispose();
+            
 
             ir.Add(new ShiftContext(0, nextCxt));
 
@@ -225,14 +211,6 @@
             int end = forward ? -1 : sources.Count;
             int stepDelta = forward ? -1 : 1;
 
-            for (int j = 1; j < sources.Count; j++)
-            {
-                int addrPrev = sources[j - 1].Context.Resolve(sources[j - 1], 0) + (sources[j - 1].cxtShift?.Invoke() ?? 0);
-                int addrCurr = sources[j].Context.Resolve(sources[j], 0) + (sources[j].cxtShift?.Invoke() ?? 0);
-                /*if (addrPrev + sources[j - 1].Size > addrCurr)
-                    throw new InvalidOperationException($"MoveData: overlapping or unsorted blocks at indices {j - 1} and {j}");*/
-            }
-
             for (int j = start; j != end; j += stepDelta)
                 MoveBlock(sources[j], targets[j].ApplyShift(shift), shift);
         }
@@ -242,12 +220,12 @@
             if (shift > 0)
             {
                 for (int i = src.Size - 1; i >= 0; i--)
-                    src[i]!.MoveTo(dstShifted[i]!);
+                    src[i].MoveTo(dstShifted[i]);
             }
             else
             {
                 for (int i = 0; i < src.Size; i++)
-                    src[i]!.MoveTo(dstShifted[i]!);
+                    src[i].MoveTo(dstShifted[i]);
             }
         }
 
@@ -256,7 +234,7 @@
         /// </summary>
         public string Compile()
         {
-            //new BFRuntimeError(Context, BFRuntimeError.ErrCode.OK);
+            new BFRuntimeError(Context, BFRuntimeError.ErrCode.OK);
             return ir.Compile();
         }
 

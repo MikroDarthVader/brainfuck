@@ -72,7 +72,7 @@
         /// <summary>
         /// Reads a character into this cell.
         /// </summary>
-        public void Input() { MoveToThis(); IR.Add(new Read()); }
+        public void Read() { MoveToThis(); IR.Add(new Read()); }
 
         // ─── Control flow ────────────────────────────────────────
 
@@ -115,13 +115,13 @@
         public void IfElse(Action codeIf, Action codeElse)
         {
             var tmp = Context.IR.ActiveContext.Alloc(AllocatorKind.Stack, 1);
-            tmp[0]!.Init(1);
+            tmp[0].Init(1);
             If(() =>
             {
                 codeIf();
                 tmp.Init();
             });
-            tmp[0]!.If(() =>
+            tmp[0].If(() =>
             {
                 codeElse();
             });
@@ -178,7 +178,7 @@
             to = to.Where(dest => dest != null && !Equals(dest)).ToArray();
             // Allocate a temporary cell that will hold the value during copy
             using var tempDesc = Context.IR.ActiveContext.Alloc(AllocatorKind.Stack);
-            var tmp = tempDesc[0]!;
+            var tmp = tempDesc[0];
 
             to = to.Append(tmp).ToArray();   // include temp in targets
             MoveTo(to);                      // self -> (to + temp)

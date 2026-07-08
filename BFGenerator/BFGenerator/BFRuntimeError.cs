@@ -9,7 +9,7 @@
 
         public enum ErrCode
         {
-            OK,
+            OK = 0,
             ERR_SAME_PTR
         }
         /// <summary>
@@ -20,7 +20,7 @@
             var ir = context.IR;
 
             var errorCellDesc = context.Alloc(AllocatorKind.Stack, 1);
-            var errorCell = errorCellDesc[0]!;
+            var errorCell = errorCellDesc[0];
 
             errorCell.Init((byte)error);
             errorCell.Print();

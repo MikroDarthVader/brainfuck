@@ -14,6 +14,11 @@
         internal int BaseIndex { get; private protected set; }
         /// <summary>Number of cells.</summary>
         public int Size { get; private protected set; }
+
+        public readonly BFVar? Parent;
+        public bool IsOwner => Parent == null;
+
+        public bool IsAlive { get; private set; }
         /// <summary>Optional context shift for cross-context access.</summary>
         internal Func<int>? cxtShift;
 
@@ -30,6 +35,9 @@
             Context = context;
             Allocator = allocator;
             cxtShift = null;
+
+            Parent = null;
+            IsAlive = true;
         }
 
         /// <summary>
@@ -53,6 +61,9 @@
             Context = other.Context;
             Allocator = other.Allocator;
             cxtShift = other.cxtShift;
+
+            Parent = other.Parent ?? other;
+            IsAlive = false;
         }
 
         /// <summary>
@@ -79,13 +90,21 @@
             new BFVar(this, offset, size);
 
         // ---- cell access ----
-        public BFCell? this[int index]
+        public BFCell this[int index]
         {
             get
             {
-                if (index >= Size) return null;
+                if (index < 0 || index >= Size)
+                    throw new ArgumentOutOfRangeException(nameof(index), index, $"Structural Memory Violation: Requested index is out of bounds for the variable descriptor. Valid cell range is [0, {Size - 1}]. For safe boundary checks, use '{nameof(TryGet)}()' instead.");
+
                 return new BFCell(this, index);
             }
+        }
+
+        public BFCell? TryGet(int index)
+        {
+            if (index >= Size || index < 0) return null;
+            return new BFCell(this, index);
         }
 
         // ---- block operations ----
@@ -113,7 +132,7 @@
                 foreach (var targetDesc in to)
                 {
                     if (i < targetDesc.Size)
-                        targetDesc[i]?.Init();
+                        targetDesc.TryGet(i)?.Init();
                 }
             }
         }
@@ -144,7 +163,7 @@
             if (Size > maxSize)
             {
                 for (int i = maxSize; i < Size; i++)
-                    this[i]?.Init();
+                    TryGet(i)?.Init();
             }
         }
 
@@ -152,7 +171,7 @@
         public void Init()
         {
             for (int i = 0; i < Size; i++)
-                this[i]?.Init();
+                TryGet(i)?.Init();
         }
 
         /// <summary>Converts to array of cells.</summary>
@@ -160,7 +179,7 @@
         {
             var array = new BFCell[Size];
             for (int i = 0; i < Size; i++)
-                array[i] = this[i]!;
+                array[i] = this[i];
             return array;
         }
 
@@ -176,11 +195,16 @@
             Context = source.Context;
             Allocator = source.Allocator;
             cxtShift = source.cxtShift;
+            IsAlive = source.IsAlive;
         }
 
         public void Dispose()
         {
+            if (!IsAlive)
+                return;
+
             Context.Free(this);
+            IsAlive = false;
         }
 
         public override bool Equals(object? obj) =>
