@@ -154,17 +154,14 @@ namespace BFGen
             // This is an unrecoverable runtime violation.
             else
             {
-                string fullEmittedText = outBuffer.ToString();
                 string matchedEnumToken = "UNKNOWN_ERROR";
-
-                // Parse the buffer to extract the matching Enum name string
-                foreach (var name in Enum.GetNames(typeof(BFRuntimeError.ErrCode)))
+                if (outBuffer.Length > 0)
                 {
-                    if (name != nameof(BFRuntimeError.ErrCode.OK) && fullEmittedText.Contains(name))
-                    {
-                        matchedEnumToken = name;
-                        break;
-                    }
+                    // Последний символ в буфере — это код ошибки (выведенный через BFRuntimeError)
+                    byte errorCode = (byte)outBuffer[^1];
+                    var enumName = Enum.GetName(typeof(BFRuntimeError.ErrCode), errorCode);
+                    if (enumName != null)
+                        matchedEnumToken = enumName;
                 }
 
                 Console.ForegroundColor = ConsoleColor.Red;
