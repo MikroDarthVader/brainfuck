@@ -7,7 +7,6 @@
     /// </summary>
     public class BFCell
     {
-        // Changed to RootDescriptor for direct access to Context and cxtShift
         private readonly BFVar descriptor;
         private readonly int offset;
 
@@ -20,7 +19,6 @@
             this.offset = offset;
         }
 
-        // Context is now guaranteed non-null because RootDescriptor always has a context
         private BFContext Context => descriptor.Context;
         private BFIR IR => Context.IR;
 
@@ -91,7 +89,7 @@
 
         /// <summary>
         /// Not self safe.
-        /// Executes <paramref name="code"/> once if non‑zero, then clears this cell.
+        /// Clears this cell, then executes <paramref name="code"/> once if non‑zero.
         /// self => 0.
         /// O(n).
         /// </summary>
@@ -99,8 +97,8 @@
         {
             While(() =>
             {
-                Init();
                 code();
+                Init();
             });
         }
 

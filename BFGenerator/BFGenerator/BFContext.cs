@@ -7,7 +7,7 @@
     }
 
     /// <summary>
-    /// Dynamic memory context. Allocators are organised in repeating blocks
+    /// Memory context. Allocators are organised in repeating blocks
     /// of (<see cref="dataDens"/> Data + <see cref="stackDens"/> Stack).
     /// Logical indices are mapped linearly into this repeating layout.
     /// </summary>
@@ -126,7 +126,7 @@
         private static int _ids = 0;
 
         /// <summary>Current maximum sizes of the allocators .</summary>
-        public int MaxSize => allocators.Sum(x => x.MaxSize);
+        public int MaxSize => BlockSize * allocators.Max(x => x.MaxSize);
 
         internal BFContext(BFIR ir, int stackDens = 1, int dataDens = 1)
         {
@@ -157,7 +157,7 @@
 
         private int ResolveAddr(AllocatorKind kind, int logicalIndex)
         {
-            if (kind == AllocatorKind.Data)
+            if (kind == AllocatorKind.Stack)
                 return (logicalIndex / stackDens) * BlockSize + logicalIndex % stackDens + dataDens;
             else
                 return (logicalIndex / dataDens) * BlockSize + logicalIndex % dataDens;

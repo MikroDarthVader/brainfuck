@@ -1,27 +1,36 @@
 ﻿namespace BFGen
 {
     /// <summary>
-    /// Root descriptor – has context and optional context shift.
+    /// Has context and optional context shift.
     /// Provides cell access and block operations.
     /// </summary>
     public class BFVar : IDisposable
     {
         /// <summary>Owning context.</summary>
         public BFContext Context { get; private set; }
+
         /// <summary>Allocator kind (Stack or Data).</summary>
         public AllocatorKind Allocator { get; private set; }
+
         /// <summary>Start index inside the allocator.</summary>
         internal int BaseIndex { get; private protected set; }
+
         /// <summary>Number of cells.</summary>
         public int Size { get; private protected set; }
 
+        /// <summary>Root variable descriptor that owns the allocated memory block.</summary>
         public readonly BFVar? Parent;
+
+        /// <summary>True if this descriptor directly owns the allocated context block.</summary>
         public bool IsOwner => Parent == null;
 
+        /// <summary>True if the memory block is active and has not been disposed.</summary>
         public bool IsAlive { get; private set; }
+
         /// <summary>Optional context shift for cross-context access.</summary>
         internal Func<int>? cxtShift;
 
+        /// <summary>True if this variable belongs to a foreign context and requires translation.</summary>
         internal bool isTransitional => cxtShift != null;
 
         /// <summary>
@@ -86,7 +95,7 @@
         /// <summary>
         /// Returns a new root descriptor for a slice at the given offset with the specified size.
         /// </summary>
-        internal BFVar Offset(int offset, int size) =>
+        internal BFVar Offset(int offset, int size = 0) =>
             new BFVar(this, offset, size);
 
         // ---- cell access ----

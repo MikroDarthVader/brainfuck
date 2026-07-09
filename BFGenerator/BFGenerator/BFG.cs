@@ -146,6 +146,7 @@
 
                     isFirstStep.If(() =>
                     {
+                        isFirstStep.Init();
                         MoveData(moveFrom, moveTo, _step);
                         ir.Add(new ShiftContext(_step));
                         isFollowUp.Init(0);
@@ -157,13 +158,13 @@
                         ir.Add(new ShiftContext(_step));
                     });
 
-                    addr[1]!.Plus(200);
+                    /*addr[1]!.Plus(200);
                     addr[1]!.Print();
                     addr[1]!.Minus(200);
 
                     addr[0]!.Plus(100);
                     addr[0]!.Print();
-                    addr[0]!.Minus(100);
+                    addr[0]!.Minus(100);*/
                 };
 
                 if (addrDest == null)
@@ -238,7 +239,6 @@
         /// </summary>
         public string Compile()
         {
-            new BFRuntimeError(Context, BFRuntimeError.ErrCode.OK);
             return ir.Compile();
         }
 
