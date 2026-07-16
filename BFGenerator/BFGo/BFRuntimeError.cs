@@ -1,4 +1,4 @@
-﻿namespace BFGen
+﻿namespace BFGo
 {
     /// <summary>
     /// Generates runtime error traps inside the Brainfuck program.

@@ -1,4 +1,4 @@
-﻿using BFGen;
+﻿using BFGo;
 
 class Program
 {

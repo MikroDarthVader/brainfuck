@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace BFGen
+namespace BFGo
 {
     /// <summary>
     /// Low‑level Brainfuck code emitter.

@@ -1,4 +1,4 @@
-﻿namespace BFGen
+﻿namespace BFGo
 {
     /// <summary>
     /// Main compiler facade. Manages static and dynamic contexts, pointer-based

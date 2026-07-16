@@ -1,4 +1,4 @@
-﻿namespace BFGen
+﻿namespace BFGo
 {
     /// <summary>
     /// Abstract type descriptor. Knows its size and internal field layout.

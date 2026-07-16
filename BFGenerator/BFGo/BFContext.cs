@@ -1,4 +1,4 @@
-﻿namespace BFGen
+﻿namespace BFGo
 {
     public enum AllocatorKind
     {
@@ -153,7 +153,6 @@
                 return descriptor.Context.Resolve(descriptor, logicalIndex);
             return ResolveAddr(descriptor.Allocator, descriptor.BaseIndex + logicalIndex);
         }
-
 
         private int ResolveAddr(AllocatorKind kind, int logicalIndex)
         {

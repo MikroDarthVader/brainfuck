@@ -1,4 +1,4 @@
-﻿namespace BFGen
+﻿namespace BFGo
 {
     /// <summary>
     /// Has context and optional context shift.
@@ -28,7 +28,7 @@
         public bool IsAlive { get; private set; }
 
         /// <summary>Optional context shift for cross-context access.</summary>
-        internal Func<int>? cxtShift;
+        private Func<int>? cxtShift;
 
         /// <summary>True if this variable belongs to a foreign context and requires translation.</summary>
         internal bool isTransitional => cxtShift != null;

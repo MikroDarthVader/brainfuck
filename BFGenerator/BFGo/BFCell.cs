@@ -1,4 +1,4 @@
-﻿namespace BFGen
+﻿namespace BFGo
 {
     /// <summary>
     /// A single logical cell inside a memory block.
@@ -7,23 +7,23 @@
     /// </summary>
     public class BFCell
     {
-        private readonly BFVar descriptor;
-        private readonly int offset;
+        public readonly BFVar owner;
+        public readonly int offset;
 
         /// <summary>
         /// Creates a cell for the given root descriptor at the specified offset.
         /// </summary>
-        public BFCell(BFVar descriptor, int offset = 0)
+        internal BFCell(BFVar descriptor, int offset = 0)
         {
-            this.descriptor = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
+            this.owner = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
             this.offset = offset;
         }
 
-        private BFContext Context => descriptor.Context;
+        public BFContext Context => owner.Context;
         private BFIR IR => Context.IR;
 
         /// <summary>Emits a MoveTo that positions the tape on this cell.</summary>
-        private void MoveToThis() => IR.Add(new MoveTo(descriptor, offset, descriptor.cxtShift));
+        private void MoveToThis() => IR.Add(new MoveTo(owner, offset, owner.cxtShift));
 
         // ─── Elementary operations ───────────────────────────────
 
@@ -239,8 +239,8 @@
         // ─── Equality ────────────────────────────────────────────
 
         public override bool Equals(object? obj)
-            => obj is BFCell other && descriptor.Equals(other.descriptor) && offset == other.offset;
+            => obj is BFCell other && owner.Equals(other.owner) && offset == other.offset;
 
-        public override int GetHashCode() => HashCode.Combine(descriptor, offset);
+        public override int GetHashCode() => HashCode.Combine(owner, offset);
     }
 }
