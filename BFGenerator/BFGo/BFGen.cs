@@ -5,7 +5,7 @@ namespace BFGo
     /// <summary>
     /// Low‑level Brainfuck code emitter.
     /// </summary>
-    internal class BFBuilder
+    internal class BFGen
     {
         private readonly StringBuilder bf = new();
 

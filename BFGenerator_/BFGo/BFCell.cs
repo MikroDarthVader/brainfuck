@@ -1,36 +1,23 @@
-﻿using System.Diagnostics;
-using System.Drawing;
-
-namespace BFGo
+﻿namespace BFGo
 {
     /// <summary>
     /// A single logical cell inside a memory block.
     /// Operations emit IR instructions and automatically insert MoveTo before each access.
     /// Methods that modify this cell are marked "Not self safe" or "Destructive for both".
     /// </summary>
-    [DebuggerDisplay("{DebugValue}")]
     public class BFCell
     {
         public readonly BFVar owner;
         public readonly int offset;
-        
-        private int DebugValue
-        {
-            get
-            {
-                if (owner.env.debugger == null)
-                    return -1;
 
-                return owner.env.debugger.GetValue(owner.env.ActiveContext.Resolve(owner, offset));
-            }
-        }
+        //TODO: добавить вывод значения в студии при отладке дебаггером.
 
         /// <summary>
         /// Creates a cell for the given root descriptor at the specified offset.
         /// </summary>
         internal BFCell(BFVar descriptor, int offset = 0)
         {
-            owner = descriptor;
+            this.owner = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
             this.offset = offset;
         }
 

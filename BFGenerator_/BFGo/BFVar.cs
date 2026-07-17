@@ -1,13 +1,9 @@
-﻿using System.Diagnostics;
-using System.Drawing;
-
-namespace BFGo
+﻿namespace BFGo
 {
     /// <summary>
     /// Has context and optional context shift.
     /// Provides cell access and block operations.
     /// </summary>
-    [DebuggerDisplay("{DebugDisplay,nq}")]
     public class BFVar : IDisposable
     {
         /// <summary>Owning context.</summary>
@@ -25,8 +21,6 @@ namespace BFGo
         /// <summary>Root variable descriptor that owns the allocated memory block.</summary>
         public readonly BFVar? Parent;
 
-        public BFG env => Context.env;
-
         /// <summary>True if this descriptor directly owns the allocated context block.</summary>
         public bool IsOwner => Parent == null;
 
@@ -39,19 +33,7 @@ namespace BFGo
         /// <summary>True if this variable belongs to a foreign context and requires translation.</summary>
         internal bool isTransitional => cxtShift != null;
 
-        private string DebugDisplay
-        {
-            get
-            {
-                if (env.debugger == null)
-                    return "Debug mode disabled";
-
-                var vals = new int[Size];
-                for (int i = 0; i < Size; i++)
-                    vals[i] = env.debugger.GetValue(env.ActiveContext.Resolve(this, i));
-                return $"Size: {Size}, Values: ({string.Join(", ", vals)})";
-            }
-        }
+        //TODO: добавить вывод значения в студии при отладке дебаггером.
 
         /// <summary>
         /// Creates a root descriptor from an allocator.
@@ -218,6 +200,7 @@ namespace BFGo
         /// </summary>
         internal void Rebind(BFVar source)
         {
+            if (source == null) throw new ArgumentNullException(nameof(source));
             BaseIndex = source.BaseIndex;
             Size = source.Size;
             Context = source.Context;

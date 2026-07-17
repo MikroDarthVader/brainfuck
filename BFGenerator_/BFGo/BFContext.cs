@@ -134,14 +134,10 @@
         /// </summary>
         internal int Resolve(BFVar descriptor, int logicalIndex)
         {
+            if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
+
             if (descriptor.Context != this)
-            {
-                if (descriptor.isTransitional)
-                    return descriptor.Context.Resolve(descriptor, logicalIndex);
-                else
-                    throw new InvalidOperationException($"Cannot access descriptor " +
-                        $"from context '{descriptor.Context.ID}' in current context '{ID}'.");
-            }
+                return descriptor.Context.Resolve(descriptor, logicalIndex);
             return ResolveAddr(descriptor.Allocator, descriptor.BaseIndex + logicalIndex);
         }
 
@@ -168,6 +164,7 @@
         /// </summary>
         public void Free(BFVar descriptor)
         {
+            if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
             if (descriptor.Context != this)
                 throw new InvalidOperationException("Descriptor belongs to a different context.");
             allocators[(int)descriptor.Allocator].Free(descriptor.BaseIndex, descriptor.Size);

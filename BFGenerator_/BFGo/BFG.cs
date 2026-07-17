@@ -13,11 +13,9 @@
         public int BlockSize => stackDens + dataDens;
 
         private readonly BFIRGen irgen;
-        internal readonly BFIRDebugger? debugger;
+        private readonly BFIRDebugger? debugger;
 
-        public bool DebugMode => debugger != null;
-
-        internal readonly BFContext staticCxt;
+        private readonly BFContext staticCxt;
         public BFContext ActiveContext { get; private set; }
 
         private BFAddrComparerType movementType;
@@ -26,7 +24,7 @@
         private BFVar? movement;
         private BFVar? flags;
 
-        public BFG(int addrSize, int stackDens, int dataDens, int cellSize = 256, bool debug = false, BFIOFormat debugFormat = BFIOFormat.ASCII)
+        public BFG(int addrSize, int stackDens, int dataDens, bool debug = false, int cellSize = 256)
         {
             if (addrSize <= 0)
                 throw new ArgumentException("Address size must be greater than zero.", nameof(addrSize));
@@ -42,10 +40,10 @@
             this.dataDens = dataDens;
             this.cellSize = cellSize;
 
-            ActiveContext = staticCxt = CreateCxt();
+            ActiveContext =  staticCxt = CreateCxt(); 
 
-            irgen = new BFIRGen();
-            debugger = debug ? new BFIRDebugger(this, debugFormat) : null;
+            irgen = new BFIRGen(staticCxt);
+            debugger = debug ? new BFIRDebugger(staticCxt) : null;
 
             movementType = new BFAddrComparerType(addrSize);
             addrType = new BFAddrType(addrSize);
@@ -222,7 +220,7 @@
 
             foreach (var desc in moveFrom)
                 (desc.Parent ?? desc).Dispose();
-
+            
 
             AddInst(new ShiftContext(0, nextCxt));
 
@@ -260,10 +258,8 @@
 
         internal void AddInst(IRInst inst)
         {
-            if (debugger != null)
-                debugger.Add(inst);
-            else
-                irgen.Add(inst);
+            irgen.Add(inst);
+            debugger?.Add(inst);
 
             if (inst is ShiftContext)
                 ActiveContext = (inst as ShiftContext)!.newContext ?? ActiveContext;
@@ -271,10 +267,8 @@
 
         internal void While(Action code)
         {
-            if (debugger != null)
-                debugger.While(code);
-            else
-                irgen.While(code);
+            irgen.While(code);
+            debugger?.While(code);
         }
 
         /// <summary>
@@ -282,7 +276,7 @@
         /// </summary>
         public string Compile()
         {
-            return debugger == null ? irgen.Compile() : "";
+            return irgen.Compile();
         }
     }
 }
