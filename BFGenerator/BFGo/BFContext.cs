@@ -156,7 +156,7 @@
         /// <summary>
         /// Allocates a block in the given allocator and returns a root descriptor.
         /// </summary>
-        public BFVar Alloc(AllocatorKind kind, int size = 1)
+        internal BFVar Alloc(AllocatorKind kind, int size = 1)
         {
             var allocator = allocators[(int)kind];
             int index = allocator.Alloc(size);
@@ -166,7 +166,7 @@
         /// <summary>
         /// Frees a previously allocated root descriptor.
         /// </summary>
-        public void Free(BFVar descriptor)
+        internal void Free(BFVar descriptor)
         {
             if (descriptor.Context != this)
                 throw new InvalidOperationException("Descriptor belongs to a different context.");

@@ -6,148 +6,6 @@
         public abstract void While(Action code);
     }
 
-    public enum BFIOFormat
-    {
-        ASCII,
-        Numeric,
-        DetaledNumeric
-    }
-
-    internal class BFIRDebugger : BFIR
-    {
-        private readonly BFIOFormat IOFormat;
-        private readonly BFG env;
-
-        private readonly Dictionary<int, int> memStatic = new();
-        private readonly Dictionary<int, int> memDynamic = new();
-
-        private int dynCxtPos = 0, cellPos = 0;
-
-        public BFIRDebugger(BFG env, BFIOFormat IOFormat)
-        {
-            this.IOFormat = IOFormat;
-            this.env = env;
-        }
-
-        internal int GetValue(int addr)
-        {
-            if (env.ActiveContext == env.staticCxt)
-            {
-                if (addr > env.staticCxt.MaxSize)
-                    return memDynamic.GetValueOrDefault(addr - env.staticCxt.MaxSize);
-                else
-                    return memStatic.GetValueOrDefault(addr);
-            }
-            else
-            {
-                if (addr + dynCxtPos < 0)
-                    return memStatic.GetValueOrDefault(env.staticCxt.MaxSize + addr);
-                else
-                    return memDynamic.GetValueOrDefault(addr + dynCxtPos);
-            }
-        }
-
-        private void SetValue(int val, int addr)
-        {
-            if (env.ActiveContext == env.staticCxt)
-            {
-                if (addr > env.staticCxt.MaxSize)
-                    memDynamic[addr - env.staticCxt.MaxSize] = val;
-                else
-                    memStatic[addr] = val;
-            }
-            else
-            {
-                if (addr + dynCxtPos < 0)
-                    memStatic[env.staticCxt.MaxSize + addr] = val;
-                else
-                    memDynamic[addr + dynCxtPos] = val;
-            }
-        }
-
-        private int GetCurrValue() => GetValue(cellPos);
-        private void SetCurrValue(int val) => SetValue(val, cellPos);
-
-        public void While(Action code)
-        {
-            while (GetCurrValue() > 0)
-                code(); //TODO: добавить проверку инвариантности команд итераций
-        }
-
-        public void Add(IRInst inst)
-        {
-            switch (inst)
-            {
-                case Plus p:
-                    {
-                        var val = GetCurrValue();
-                        val += p.val;
-                        val %= env.cellSize;
-                        if (val < 0)
-                            val += env.cellSize;
-                        SetCurrValue(val);
-                    }
-                    break;
-
-                case Minus m:
-                    {
-                        var val = GetCurrValue();
-                        val -= m.val;
-                        val %= env.cellSize;
-                        if (val < 0)
-                            val += env.cellSize;
-                        SetCurrValue(val);
-                    }
-                    break;
-
-                case MoveTo mv:
-                    cellPos = mv.relativePos;
-                    break;
-
-                case ShiftContext sc:
-                    if (sc.newContext != env.staticCxt && env.ActiveContext != env.staticCxt)
-                        dynCxtPos += sc.shiftFromParentCxt();
-                    break;
-
-                case Print:
-                    {
-                        var val = GetCurrValue();
-                        if (IOFormat == BFIOFormat.ASCII)
-                            Console.Write((char)val);
-                        else if (IOFormat == BFIOFormat.Numeric)
-                            Console.WriteLine($"Print: {val}");
-                        else
-                            Console.WriteLine($"Print cell {cellPos}, context {env.ActiveContext.ID}: {val}");
-                    }
-                    break;
-
-                case Read:
-                    if (IOFormat == BFIOFormat.ASCII)
-                        SetCurrValue(Console.Read());
-                    else if (IOFormat == BFIOFormat.Numeric)
-                    {
-                        Console.Write("Read: ");
-                        if (int.TryParse(Console.ReadLine(), out int val))
-                            SetCurrValue(val);
-                        else
-                            SetCurrValue(0);
-                    }
-                    else
-                    {
-                        Console.Write($"Read cell {cellPos}, context {env.ActiveContext.ID}: ");
-                        if (int.TryParse(Console.ReadLine(), out int val))
-                            SetCurrValue(val);
-                        else
-                            SetCurrValue(0);
-                    }
-                    break;
-
-                default:
-                    break;
-            }
-        }
-    }
-
     internal class BFIRGen : BFIR
     {
         private List<IRInst> instructions = new List<IRInst>();
@@ -169,42 +27,65 @@
             Add(new LoopEnd());
         }
 
-        private class LoopStart : IRInst { public string Compile(BFGen host) => host.BFPut('['); }
-        private class LoopEnd : IRInst { public string Compile(BFGen host) => host.BFPut(']'); }
+        private class LoopStart : IRInst 
+        { 
+            public string Compile(BFGen host) => host.BFPut('[');
+            public IRInst Clone() => new LoopStart();
+        }
+        private class LoopEnd : IRInst 
+        { 
+            public string Compile(BFGen host) => host.BFPut(']');
+            public IRInst Clone() => new LoopEnd();
+        }
     }
 
-    internal interface IRInst { public string Compile(BFGen host); }
-    internal class Print : IRInst { public string Compile(BFGen host) => host.BFPut('.'); }
-    internal class Read : IRInst { public string Compile(BFGen host) => host.BFPut(','); }
-
-    internal class Plus : IRInst
+    internal interface IRInst
     {
-        internal int val;
-        public Plus(int val = 1) { this.val = val; }
-        public string Compile(BFGen host) => host.BFPut('+', val);
+        public IRInst Clone();
+        public string Compile(BFGen host);
+    }
+    internal class Print : IRInst
+    {
+        public IRInst Clone() => new Print();
+        public string Compile(BFGen host) => host.BFPut('.');
+        public override bool Equals(object? obj) => obj != null && obj is Print;
+        public override int GetHashCode() => typeof(Print).GetHashCode(); 
+        public override string ToString() => "[Print]";
+    }
+    internal class Read : IRInst
+    {
+        public IRInst Clone() => new Read();
+        public string Compile(BFGen host) => host.BFPut(',');
+        public override bool Equals(object? obj) => obj != null && obj is Read;
+        public override int GetHashCode() => typeof(Read).GetHashCode();
+        public override string ToString() => "[Read]";
     }
 
-    internal class Minus : IRInst
+    internal class Change : IRInst
     {
         internal int val;
-        public Minus(int val = 1) { this.val = val; }
-        public string Compile(BFGen host) => host.BFPut('-', val);
+        public Change(int val) { this.val = val; }
+        public string Compile(BFGen host) => val > 0 ? host.BFPut('+', val) : host.BFPut('-', -val);
+        public IRInst Clone() => new Change(val);
+        public override bool Equals(object? obj) => obj is Change c && c.val == val;
+        public override int GetHashCode() => HashCode.Combine(typeof(Change), val); 
+        public override string ToString() => $"[Change] (Value: {val})";
     }
 
     internal class MoveTo : IRInst
     {
         public readonly BFVar descriptor;
-        public readonly int allocPos;
+        public readonly int cellPos;
         public readonly Func<int>? shiftFromParentCxt;
 
-        public MoveTo(BFVar descriptor, int allocPos, Func<int>? shiftFromParentCxt)
+        public MoveTo(BFVar descriptor, int cellPos, Func<int>? shiftFromParentCxt)
         {
             var activeContext = descriptor.Context.env.ActiveContext;
             if (descriptor.Context != activeContext && shiftFromParentCxt == null)
                 throw new InvalidOperationException("Cannot generate MoveTo for a foreign descriptor without a context shift function.");
 
             this.descriptor = new BFVar(descriptor);
-            this.allocPos = allocPos;
+            this.cellPos = cellPos;
             this.shiftFromParentCxt = shiftFromParentCxt;
         }
 
@@ -212,16 +93,33 @@
         {
             get
             {
-                var localPos = descriptor.Context.Resolve(descriptor, allocPos);
-                var shift = 0; 
-                if(shiftFromParentCxt != null)
+                var localPos = descriptor.Context.Resolve(descriptor, cellPos);
+                var shift = 0;
+                if (shiftFromParentCxt != null)
                     shift = shiftFromParentCxt();
                 return localPos + shift;
             }
         }
-        public string Compile(BFGen host)
+        public IRInst Clone() => new MoveTo(descriptor, cellPos, shiftFromParentCxt);
+
+        public override bool Equals(object? obj)
         {
-            return host.BFMoveTo(relativePos);
+            return obj is MoveTo m &&
+                   m.cellPos == cellPos &&
+                   m.descriptor.Equals(descriptor) &&
+                   (m.shiftFromParentCxt == null && shiftFromParentCxt == null ||
+                    m.shiftFromParentCxt != null && shiftFromParentCxt != null &&
+                    m.shiftFromParentCxt() == shiftFromParentCxt());
+        }
+
+        public override int GetHashCode() => HashCode.Combine(typeof(MoveTo), cellPos, descriptor, shiftFromParentCxt == null ? 0 : shiftFromParentCxt());
+
+        public string Compile(BFGen host) => host.BFMoveTo(relativePos);
+
+        public override string ToString()
+        {
+            var shiftVal = shiftFromParentCxt != null ? shiftFromParentCxt().ToString() : "None";
+            return $"[MoveTo] (VarPos: {descriptor.BaseIndex}, CellPos: {cellPos}, ActiveShift: {shiftVal}, TotalRelativePos: {relativePos})";
         }
     }
 
@@ -241,7 +139,25 @@
             shiftFromParentCxt = shift;
             this.newContext = newContext;
         }
+        public IRInst Clone() => new ShiftContext(shiftFromParentCxt, newContext);
+
+        public override bool Equals(object? obj)
+        {
+            return obj is ShiftContext s &&
+                   s.newContext == newContext &&
+                   (s.shiftFromParentCxt == null && shiftFromParentCxt == null ||
+                    s.shiftFromParentCxt != null && shiftFromParentCxt != null &&
+                    s.shiftFromParentCxt() == shiftFromParentCxt());
+        }
+
+        public override int GetHashCode() => HashCode.Combine(typeof(ShiftContext), newContext?.GetHashCode(), shiftFromParentCxt == null ? 0 : shiftFromParentCxt());
 
         public string Compile(BFGen host) => host.BFShiftContext(shiftFromParentCxt());
+
+        public override string ToString()
+        {
+            var targetContextId = newContext != null ? newContext.ID.ToString() : "Null (Relative Shift)";
+            return $"[ShiftContext] (Target Context ID: {targetContextId}, ShiftDelta: {shiftFromParentCxt()})";
+        }
     }
 }

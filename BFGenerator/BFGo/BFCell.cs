@@ -13,7 +13,7 @@ namespace BFGo
     {
         public readonly BFVar owner;
         public readonly int offset;
-        
+
         private int DebugValue
         {
             get
@@ -45,46 +45,62 @@ namespace BFGo
         /// Adds <paramref name="val"/> to this cell.
         /// O(val).
         /// </summary>
-        public void Plus(int val = 1)
+        public BFCell Plus(int val = 1)
         {
+            if (val == 0)
+                return this;
+
             MoveToThis();
-            env.AddInst(new Plus(val));
+            env.AddInst(new Change(val));
+            return this;
         }
 
         /// <summary>
         /// Subtracts <paramref name="val"/> from this cell.
         /// O(val).
         /// </summary>
-        public void Minus(int val = 1)
+        public BFCell Minus(int val = 1)
         {
+            if (val == 0)
+                return this;
+
             MoveToThis();
-            env.AddInst(new Minus(val));
+            env.AddInst(new Change(-val));
+            return this;
         }
 
         /// <summary>
         /// Changes this cell's value by the given delta.
         /// O(abs(delta)).
         /// </summary>
-        public void Change(int delta)
+        public BFCell Change(int delta)
         {
-            if (delta == 0) return;
+            if (delta == 0) return this;
 
             MoveToThis();
-            if (delta > 0)
-                env.AddInst(new Plus(delta));
-            else
-                env.AddInst(new Minus(-delta));
+            env.AddInst(new Change(delta));
+            return this;
         }
 
         /// <summary>
         /// Outputs this cell's value.
         /// </summary>
-        public void Print() { MoveToThis(); env.AddInst(new Print()); }
+        public BFCell Print() 
+        { 
+            MoveToThis(); 
+            env.AddInst(new Print());
+            return this;
+        }
 
         /// <summary>
         /// Reads a character into this cell.
         /// </summary>
-        public void Read() { MoveToThis(); env.AddInst(new Read()); }
+        public BFCell Read() 
+        { 
+            MoveToThis(); 
+            env.AddInst(new Read());
+            return this;
+        }
 
         // ─── Control flow ────────────────────────────────────────
 
@@ -92,10 +108,12 @@ namespace BFGo
         /// Brainfuck loop anchored to this cell.
         /// Tape is repositioned to this cell before each iteration check.
         /// </summary>
-        public void While(Action code)
+        public BFCell While(Action code)
         {
             MoveToThis();
             env.While(() => { code(); MoveToThis(); });
+
+            return this;
         }
 
         /// <summary>
@@ -104,9 +122,9 @@ namespace BFGo
         /// self => 0.
         /// O(n).
         /// </summary>
-        public void If(Action code)
+        public BFCell If(Action code)
         {
-            While(() =>
+            return While(() =>
             {
                 code();
                 Init();
@@ -121,7 +139,7 @@ namespace BFGo
         /// <param name="s1"></param>
         /// <param name="codeIf"></param>
         /// <param name="codeElse"></param>
-        public void IfElse(Action codeIf, Action codeElse)
+        public BFCell IfElse(Action codeIf, Action codeElse)
         {
             var tmp = env.ActiveContext.Alloc(AllocatorKind.Stack, 1);
             tmp[0].Init(1);
@@ -134,6 +152,7 @@ namespace BFGo
             {
                 codeElse();
             });
+            return this;
         }
 
         // ─── Initialisation ──────────────────────────────────────
@@ -142,10 +161,10 @@ namespace BFGo
         /// Sets this cell to zero, then adds <paramref name="val"/>.
         /// O(n + val).
         /// </summary>
-        public void Init(byte val = 0)
+        public BFCell Init(byte val = 0)
         {
-            While(() => { Minus(); });   // [-]
-            if (val > 0) Plus(val);
+            While(() => { Minus(); });
+            return Plus(val);
         }
 
         // ─── Data movement ───────────────────────────────────────
@@ -155,9 +174,9 @@ namespace BFGo
         /// to => to + self;  self => 0.
         /// O(n).
         /// </summary>
-        public void AddTo(params BFCell?[] to)
+        public BFCell AddTo(params BFCell?[] to)
         {
-            While(() =>
+            return While(() =>
             {
                 Minus();                 // decrement self
                 foreach (var dest in to)
@@ -171,27 +190,28 @@ namespace BFGo
         /// this => 0;  each dest => original self.
         /// O(n).
         /// </summary>
-        public void MoveTo(params BFCell?[] to)
+        public BFCell MoveTo(params BFCell?[] to)
         {
             foreach (var dest in to)
                 dest?.Init();             // clear targets
-            AddTo(to);                  // move value
+            return AddTo(to);                  // move value
         }
 
         /// <summary>
         /// Copies this cell's value to <paramref name="to"/> without destroying self.
         /// O(n).
         /// </summary>
-        public void CopyTo(params BFCell?[] to)
+        public BFCell CopyTo(params BFCell?[] to)
         {
             to = to.Where(dest => dest != null && !Equals(dest)).ToArray();
-            // Allocate a temporary cell that will hold the value during copy
             using var tempDesc = env.ActiveContext.Alloc(AllocatorKind.Stack);
             var tmp = tempDesc[0];
 
             to = to.Append(tmp).ToArray();   // include temp in targets
             MoveTo(to);                      // self -> (to + temp)
             tmp.MoveTo(this);                // temp -> self, restoring original value
+
+            return this;
         }
 
         // ─── Comparison ──────────────────────────────────────────
@@ -200,14 +220,14 @@ namespace BFGo
         /// Destructive for both cells.
         /// Subtracts the smaller value from both.
         /// After call:
-        ///   if self >= other : self = self - other,  other = 0
-        ///   if self &lt; other  : self = 0,            other = other - self
+        ///   if self >= right : self = self - right,  right = 0
+        ///   if self &lt; right  : self = 0,            right = right - self
         /// O(n2).
         /// </summary>
-        public void CompareTo(BFCell other)
+        public static void Compare(BFCell left, BFCell right)
         {
             // Three temporary cells for the algorithm
-            using var locals = env.ActiveContext.Alloc(AllocatorKind.Stack, 3);
+            using var locals = left.env.ActiveContext.Alloc(AllocatorKind.Stack, 3);
             BFCell[] tmp = locals.ToArray();
             var flagB = tmp[0];   // 1 if other may be non‑zero in current iteration
             var counterB = tmp[1];   // counts successful decrements of other
@@ -216,33 +236,33 @@ namespace BFGo
             foreach (var cell in tmp)
                 cell.Init();
 
-            While(() =>
+            left.While(() =>
             {
                 // ---- Try to decrement other once, if it is non‑zero ----
                 flagB.Plus();                       // assume other is non‑zero
-                other.While(() =>
+                right.While(() =>
                 {
                     flagB.Init();                   // other was non‑zero → clear flag
                     counterB.Plus();                // count successful decrement
-                    other.Minus();
+                    right.Minus();
                 });
 
                 // ---- Accumulate results ----
                 flagB.AddTo(flagSelfGt);            // if flagB remained set, other was zero → remember self > other
-                counterB.AddTo(other);              // return all temporarily removed decrements back to other
+                counterB.AddTo(right);              // return all temporarily removed decrements back to other
 
                 // ---- Decrement both cells ----
-                Minus();
-                other.Minus();
+                left.Minus();
+                right.Minus();
             });
 
             // ---- Correction for the case self > other ----
             flagSelfGt.If(() =>
             {
-                other.While(() =>
+                right.While(() =>
                 {
-                    Plus();
-                    other.Plus();
+                    left.Plus();
+                    right.Plus();
                 });
             });
         }

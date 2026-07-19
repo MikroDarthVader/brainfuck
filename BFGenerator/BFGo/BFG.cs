@@ -18,7 +18,7 @@
         public bool DebugMode => debugger != null;
 
         internal readonly BFContext staticCxt;
-        public BFContext ActiveContext { get; private set; }
+        internal BFContext ActiveContext { get; private set; }
 
         private BFAddrComparerType movementType;
         private BFAddrType addrType;
@@ -26,7 +26,7 @@
         private BFVar? movement;
         private BFVar? flags;
 
-        public BFG(int addrSize, int stackDens, int dataDens, int cellSize = 256, bool debug = false, BFIOFormat debugFormat = BFIOFormat.ASCII)
+        public BFG(int addrSize, int stackDens, int dataDens, int cellSize = 256, BFIOFormat debugFormat = BFIOFormat.None)
         {
             if (addrSize <= 0)
                 throw new ArgumentException("Address size must be greater than zero.", nameof(addrSize));
@@ -45,7 +45,7 @@
             ActiveContext = staticCxt = CreateCxt();
 
             irgen = new BFIRGen();
-            debugger = debug ? new BFIRDebugger(this, debugFormat) : null;
+            debugger = debugFormat != BFIOFormat.None ? new BFIRDebugger(this, debugFormat) : null;
 
             movementType = new BFAddrComparerType(addrSize);
             addrType = new BFAddrType(addrSize);
@@ -54,12 +54,14 @@
         }
 
         private int cxtCount = 0;
-        public BFContext CreateCxt()
+        private BFContext CreateCxt()
         {
             var cxt = new BFContext(this, cxtCount);
             cxtCount++;
             return cxt;
         }
+
+        public BFVar Alloc(AllocatorKind allocator) => ActiveContext.Alloc(allocator);
 
         /// <summary>
         /// Unified transition method.

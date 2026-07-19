@@ -21,7 +21,7 @@
             var posDesc = Pos.From(desc);
             var negDesc = Neg.From(desc);
             for (int i = 0; i < Pos.Size; i++)
-                posDesc[i].CompareTo(negDesc[i]);
+                BFCell.Compare(posDesc[i], negDesc[i]);
         }
     }
 }

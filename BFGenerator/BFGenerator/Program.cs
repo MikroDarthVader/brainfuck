@@ -4,31 +4,13 @@ class Program
 {
     static void Main()
     {
-        var bfg = new BFG(addrSize: 1, stackDens: 1, dataDens: 1, cellSize: 256, debug: true, BFIOFormat.DetaledNumeric);
+        var bfg = new BFG(addrSize: 1, stackDens: 1, dataDens: 1, cellSize: 256, BFIOFormat.None);
 
-        var addr = bfg.ActiveContext.Alloc(AllocatorKind.Data);
-        
-        BFCell cell = addr[0];
-
-        addr[0].Init(3);
-        
-        bfg.Go(addr);
-
-        var tmp = bfg.ActiveContext.Alloc(AllocatorKind.Data, 1);
-        tmp[0].Init(128);
-        tmp[0].Print();
-
-        bfg.Go(null);
-
-        addr[0].Print();
-
-        bfg.Go(addr);
-
-        tmp = bfg.ActiveContext.Alloc(AllocatorKind.Data, 1);
-
-        bfg.Go(null);
-
-        addr[0].Print();
+        var cell = bfg.Alloc(AllocatorKind.Data)[0];
+        cell.Init(3).While(() => {
+            bfg.Alloc(AllocatorKind.Data)[0].Plus().Print();
+            cell.Minus().Print();
+        });
 
         if (!bfg.DebugMode)
             Compile(bfg);
@@ -39,8 +21,9 @@ class Program
         //new BFRuntimeError(bfg.ActiveContext, BFRuntimeError.ErrCode.OK);
 
         string code = bfg.Compile();
-        Console.WriteLine("=== Сгенерированный Brainfuck ===");
+        Console.WriteLine("=== Generated Brainfuck ===\n");
         Console.WriteLine(code);
+        Console.WriteLine("\n=== Run ===\n");
         RunBrainfuck(code, BFIOFormat.DetaledNumeric);
     }
 

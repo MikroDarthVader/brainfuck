@@ -39,7 +39,7 @@ namespace BFGo
         /// <summary>True if this variable belongs to a foreign context and requires translation.</summary>
         internal bool isTransitional => cxtShift != null;
 
-        private string DebugDisplay
+        internal string DebugDisplay
         {
             get
             {
