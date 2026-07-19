@@ -1,6 +1,6 @@
 ﻿namespace BFGo
 {
-    internal abstract class BFIR
+    internal interface BFIR
     {
         public abstract void Add(IRInst inst);
         public abstract void While(Action code);
@@ -40,7 +40,7 @@
             }
             else
             {
-                if (addr < 0)
+                if (addr + dynCxtPos < 0)
                     return memStatic.GetValueOrDefault(env.staticCxt.MaxSize + addr);
                 else
                     return memDynamic.GetValueOrDefault(addr + dynCxtPos);
@@ -58,7 +58,7 @@
             }
             else
             {
-                if (addr < 0)
+                if (addr + dynCxtPos < 0)
                     memStatic[env.staticCxt.MaxSize + addr] = val;
                 else
                     memDynamic[addr + dynCxtPos] = val;
@@ -68,13 +68,13 @@
         private int GetCurrValue() => GetValue(cellPos);
         private void SetCurrValue(int val) => SetValue(val, cellPos);
 
-        public override void While(Action code)
+        public void While(Action code)
         {
             while (GetCurrValue() > 0)
-                code();
+                code(); //TODO: добавить проверку инвариантности команд итераций
         }
 
-        public override void Add(IRInst inst)
+        public void Add(IRInst inst)
         {
             switch (inst)
             {
@@ -160,9 +160,9 @@
             return bFBuilder.ToString();
         }
 
-        public override void Add(IRInst inst) => instructions.Add(inst);
+        public void Add(IRInst inst) => instructions.Add(inst);
 
-        public override void While(Action code)
+        public void While(Action code)
         {
             Add(new LoopStart());
             code();
@@ -172,7 +172,6 @@
         private class LoopStart : IRInst { public string Compile(BFGen host) => host.BFPut('['); }
         private class LoopEnd : IRInst { public string Compile(BFGen host) => host.BFPut(']'); }
     }
-
 
     internal interface IRInst { public string Compile(BFGen host); }
     internal class Print : IRInst { public string Compile(BFGen host) => host.BFPut('.'); }
@@ -225,7 +224,6 @@
             return host.BFMoveTo(relativePos);
         }
     }
-
 
     internal class ShiftContext : IRInst
     {

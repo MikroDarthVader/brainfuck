@@ -6,27 +6,27 @@ class Program
     {
         var bfg = new BFG(addrSize: 1, stackDens: 1, dataDens: 1, cellSize: 256, debug: true, BFIOFormat.DetaledNumeric);
 
-        var cell = bfg.ActiveContext.Alloc(AllocatorKind.Data, 3);
         var addr = bfg.ActiveContext.Alloc(AllocatorKind.Data);
-        cell[0].Read();
-        cell[2].Init(10);
+        
+        BFCell cell = addr[0];
 
         addr[0].Init(3);
         
-        bfg.Go(addr, cell);
-        bfg.Go(null, cell);
+        bfg.Go(addr);
 
-        cell[0].Print();
-        cell[2].Print();
+        var tmp = bfg.ActiveContext.Alloc(AllocatorKind.Data, 1);
+        tmp[0].Init(128);
+        tmp[0].Print();
+
+        bfg.Go(null);
 
         addr[0].Print();
 
-        bfg.Go(addr, cell);
+        bfg.Go(addr);
 
-        cell[0].Print();
-        cell[2].Print();
+        tmp = bfg.ActiveContext.Alloc(AllocatorKind.Data, 1);
 
-        bfg.Go(null, cell);
+        bfg.Go(null);
 
         addr[0].Print();
 
