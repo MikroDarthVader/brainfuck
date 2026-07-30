@@ -1,4 +1,6 @@
-﻿namespace BFGo
+﻿using System.Diagnostics;
+
+namespace BFGo
 {
     /// <summary>
     /// Main compiler facade. Manages static and dynamic contexts, pointer-based
@@ -6,19 +8,12 @@
     /// </summary>
     public class BFG
     {
-        public readonly int addrSize;
-        public readonly int stackDens;
-        public readonly int dataDens;
-        public readonly int cellSize;
-        public int BlockSize => stackDens + dataDens;
+        internal readonly BFIR ir;
 
-        private readonly BFIRGen irgen;
-        internal readonly BFIRDebugger? debugger;
-
-        public bool DebugMode => debugger != null;
+        public bool Debugging => ir.Debuggable;
+        internal BFGCfg cfg => ir.cfg;
 
         internal readonly BFContext staticCxt;
-        internal BFContext ActiveContext { get; private set; }
 
         private BFAddrComparerType movementType;
         private BFAddrType addrType;
@@ -26,42 +21,26 @@
         private BFVar? movement;
         private BFVar? flags;
 
-        public BFG(int addrSize, int stackDens, int dataDens, int cellSize = 256, BFIOFormat debugFormat = BFIOFormat.None)
+        internal BFG(BFIR ir)
         {
-            if (addrSize <= 0)
-                throw new ArgumentException("Address size must be greater than zero.", nameof(addrSize));
-            if (stackDens <= 0)
-                throw new ArgumentException("Stack density must be greater than zero.", nameof(stackDens));
-            if (dataDens <= 0)
-                throw new ArgumentException("Data density must be greater than zero.", nameof(dataDens));
-            if (cellSize <= 0)
-                throw new ArgumentException("Cell size must be greater than zero.", nameof(cellSize));
+            this.ir = ir;
 
-            this.addrSize = addrSize;
-            this.stackDens = stackDens;
-            this.dataDens = dataDens;
-            this.cellSize = cellSize;
+            staticCxt = ir.ActiveContext;
 
-            ActiveContext = staticCxt = CreateCxt();
-
-            irgen = new BFIRGen();
-            debugger = debugFormat != BFIOFormat.None ? new BFIRDebugger(this, debugFormat) : null;
-
-            movementType = new BFAddrComparerType(addrSize);
-            addrType = new BFAddrType(addrSize);
+            movementType = new BFAddrComparerType(cfg.addrSize);
+            addrType = new BFAddrType(cfg.addrSize);
 
             addr = null;
         }
 
-        private int cxtCount = 0;
-        private BFContext CreateCxt()
-        {
-            var cxt = new BFContext(this, cxtCount);
-            cxtCount++;
-            return cxt;
-        }
+        public BFVar Alloc(AllocatorKind kind, int size = 1) => ir.ActiveContext.Alloc(kind, size);
 
-        public BFVar Alloc(AllocatorKind allocator) => ActiveContext.Alloc(allocator);
+        [DebuggerHidden]
+        public void Break() 
+        {
+            if (Debugging && Debugger.IsAttached)
+                Debugger.Break();
+        }
 
         /// <summary>
         /// Unified transition method.
@@ -74,7 +53,7 @@
             var moveFrom = move.OrderBy(x => x.BaseIndex).ToList();
             if (addrDesc != null)
             {
-                if (ActiveContext == staticCxt)
+                if (ir.ActiveContext == staticCxt)
                 {
                     GoDynamic(moveFrom);
                     GoByPtr(addrDesc.ApplyShift(() => -staticCxt.MaxSize), moveFrom, true);
@@ -84,7 +63,7 @@
             }
             else
             {
-                if (ActiveContext == staticCxt)
+                if (ir.ActiveContext == staticCxt)
                     throw new InvalidOperationException("Execution State Violation: Attempted to perform a static rollback transition (Go(null)), " +
                         "but the compiler is already operating inside the root static context. " +
                         "Ensure you only return to static from an active dynamic frame.");
@@ -102,22 +81,22 @@
                 desc.MoveTo(tmp.ApplyShift(() => -staticCxt.MaxSize));
                 desc.Rebind(tmp);
             }
-            AddInst(new ShiftContext(() => -staticCxt.MaxSize, staticCxt));
+            ir.Add(new ShiftContext(() => -staticCxt.MaxSize, staticCxt));
 
             addr = movement = flags = null;
         }
 
         private void GoDynamic(List<BFVar> moveFrom)
         {
-            var zeroCxt = CreateCxt();
-            addr = zeroCxt.Alloc(AllocatorKind.Stack, addrSize);
+            var zeroCxt = ir.CreateCxt();
+            addr = zeroCxt.Alloc(AllocatorKind.Stack, cfg.addrSize);
             flags = zeroCxt.Alloc(AllocatorKind.Stack, 2);
             movement = zeroCxt.Alloc(AllocatorKind.Stack, movementType.Size);
 
             foreach (var desc in moveFrom)
                 desc.Rebind(desc.ApplyShift(() => -staticCxt.MaxSize));
 
-            AddInst(new ShiftContext(() => staticCxt.MaxSize, zeroCxt));
+            ir.Add(new ShiftContext(() => staticCxt.MaxSize, zeroCxt));
 
             addr.Init();
         }
@@ -143,8 +122,8 @@
             isFirstStep.Init(1);
             isFollowUp.Init(0);
 
-            var nextCxt = CreateCxt();
-            var nextAddr = nextCxt.Alloc(AllocatorKind.Stack, addrSize);
+            var nextCxt = ir.CreateCxt();
+            var nextAddr = nextCxt.Alloc(AllocatorKind.Stack, cfg.addrSize);
             var nextFlags = nextCxt.Alloc(AllocatorKind.Stack, 2);
             var nextMovement = nextCxt.Alloc(AllocatorKind.Stack, movementType.Size);
 
@@ -162,7 +141,7 @@
 
             for (int i = 0; i < addrType.Size; i++)
             {
-                var step = (int)Math.Pow(Math.Pow(2, cellSize), i) * BlockSize;
+                var step = (int)Math.Pow(Math.Pow(2, cfg.cellSize), i) * cfg.BlockSize;
 
                 var doStep = (int _step) =>
                 {
@@ -174,23 +153,15 @@
                     {
                         isFirstStep.Init();
                         MoveData(moveFrom, moveTo, _step);
-                        AddInst(new ShiftContext(_step));
+                        ir.Add(new ShiftContext(_step));
                         isFollowUp.Init(0);
                     });
 
                     isFollowUp.If(() =>
                     {
                         MoveData(moveTo.Select(x => x.ApplyShift(0)).ToList(), moveTo, _step);
-                        AddInst(new ShiftContext(_step));
+                        ir.Add(new ShiftContext(_step));
                     });
-
-                    /*addr[1]!.Plus(200);
-                    addr[1]!.Print();
-                    addr[1]!.Minus(200);
-
-                    addr[0]!.Plus(100);
-                    addr[0]!.Print();
-                    addr[0]!.Minus(100);*/
                 };
 
                 if (addrDest == null)
@@ -219,14 +190,14 @@
 
             isFirstStep.If(() =>
             {
-                BFRuntimeError bFRuntimeError = new BFRuntimeError(ActiveContext, BFRuntimeError.ErrCode.ERR_SAME_PTR);
+                BFRuntimeError bFRuntimeError = new BFRuntimeError(ir.ActiveContext, BFRuntimeError.ErrCode.ERR_SAME_PTR);
             });
 
             foreach (var desc in moveFrom)
                 (desc.Parent ?? desc).Dispose();
 
 
-            AddInst(new ShiftContext(0, nextCxt));
+            ir.Add(new ShiftContext(0, nextCxt));
 
             addr.Rebind(nextAddr);
             movement.Rebind(nextMovement);
@@ -258,33 +229,6 @@
                 for (int i = 0; i < src.Size; i++)
                     src[i].MoveTo(dstShifted[i]);
             }
-        }
-
-        internal void AddInst(IRInst inst)
-        {
-            if (debugger != null)
-                debugger.Add(inst);
-            else
-                irgen.Add(inst);
-
-            if (inst is ShiftContext)
-                ActiveContext = (inst as ShiftContext)!.newContext ?? ActiveContext;
-        }
-
-        internal void While(Action code)
-        {
-            if (debugger != null)
-                debugger.While(code);
-            else
-                irgen.While(code);
-        }
-
-        /// <summary>
-        /// Finalises IR construction and generates the resulting Brainfuck code.
-        /// </summary>
-        public string Compile()
-        {
-            return debugger == null ? irgen.Compile() : "";
         }
     }
 }

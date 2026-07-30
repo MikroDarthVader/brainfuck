@@ -109,23 +109,24 @@
             }
         }
 
-        public readonly BFG env;
+        internal readonly BFIR ir;
+        public BFGCfg cfg => ir.cfg;
 
         private readonly BFAllocator[] allocators;
 
         public readonly int ID;
 
         /// <summary>Current maximum sizes of the allocators .</summary>
-        public int MaxSize => env.BlockSize * allocators.Max(x => x.MaxSize);
+        public int MaxSize => cfg.BlockSize * allocators.Max(x => x.MaxSize);
 
-        internal BFContext(BFG env, int ID)
+        internal BFContext(BFIR ir, int ID)
         {
             int count = Enum.GetValues<AllocatorKind>().Length;
             allocators = new BFAllocator[count];
             allocators[(int)AllocatorKind.Stack] = new BFAllocator();
             allocators[(int)AllocatorKind.Data] = new BFAllocator();
 
-            this.env = env;
+            this.ir = ir;
             this.ID = ID;
         }
 
@@ -148,9 +149,9 @@
         private int ResolveAddr(AllocatorKind kind, int logicalIndex)
         {
             if (kind == AllocatorKind.Stack)
-                return (logicalIndex / env.stackDens) * env.BlockSize + logicalIndex % env.stackDens + env.dataDens;
+                return (logicalIndex / cfg.stackDens) * cfg.BlockSize + logicalIndex % cfg.stackDens + cfg.dataDens;
             else
-                return (logicalIndex / env.dataDens) * env.BlockSize + logicalIndex % env.dataDens;
+                return (logicalIndex / cfg.dataDens) * cfg.BlockSize + logicalIndex % cfg.dataDens;
         }
 
         /// <summary>

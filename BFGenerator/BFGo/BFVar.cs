@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics;
-using System.Drawing;
 
 namespace BFGo
 {
@@ -25,8 +24,6 @@ namespace BFGo
         /// <summary>Root variable descriptor that owns the allocated memory block.</summary>
         public readonly BFVar? Parent;
 
-        public BFG env => Context.env;
-
         /// <summary>True if this descriptor directly owns the allocated context block.</summary>
         public bool IsOwner => Parent == null;
 
@@ -34,7 +31,7 @@ namespace BFGo
         public bool IsAlive { get; private set; }
 
         /// <summary>Optional context shift for cross-context access.</summary>
-        internal Func<int>? cxtShift;
+        internal ShiftDescriptor? cxtShift;
 
         /// <summary>True if this variable belongs to a foreign context and requires translation.</summary>
         internal bool isTransitional => cxtShift != null;
@@ -43,12 +40,12 @@ namespace BFGo
         {
             get
             {
-                if (env.debugger == null)
+                if (!(Context.ir is BFIRDebugger debugger))
                     return "Debug mode disabled";
 
                 var vals = new int[Size];
                 for (int i = 0; i < Size; i++)
-                    vals[i] = env.debugger.GetValue(env.ActiveContext.Resolve(this, i));
+                    vals[i] = debugger.GetValue(debugger.ActiveContext.Resolve(this, i));
                 return $"Size: {Size}, Values: ({string.Join(", ", vals)})";
             }
         }
@@ -63,8 +60,8 @@ namespace BFGo
             Size = size;
             Context = context;
             Allocator = allocator;
-            cxtShift = null;
 
+            cxtShift = null;
             Parent = null;
             IsAlive = true;
         }
@@ -98,7 +95,7 @@ namespace BFGo
         /// <summary>
         /// Private constructor for applying a context shift function.
         /// </summary>
-        private BFVar(BFVar other, Func<int> cxtShift)
+        private BFVar(BFVar other, ShiftDescriptor cxtShift)
         {
             BaseIndex = other.BaseIndex;
             Size = other.Size;
@@ -108,9 +105,9 @@ namespace BFGo
         }
 
         /// <summary>Returns a new descriptor with an additional context shift function.</summary>
-        internal BFVar ApplyShift(Func<int> shift) => new BFVar(this, shift);
+        internal BFVar ApplyShift(Func<int> shift) => new BFVar(this, new ShiftDescriptor(shift));
         /// <summary>Returns a new descriptor with an additional constant context shift.</summary>
-        internal BFVar ApplyShift(int shift) => new BFVar(this, () => shift);
+        internal BFVar ApplyShift(int shift) => new BFVar(this, new ShiftDescriptor(shift));
 
         /// <summary>
         /// Returns a new root descriptor for a slice at the given offset with the specified size.
@@ -237,11 +234,12 @@ namespace BFGo
 
         public override bool Equals(object? obj) =>
             obj is BFVar other &&
-            Context == other.Context &&
+            Context.ID == other.Context.ID &&
             Allocator == other.Allocator &&
             BaseIndex == other.BaseIndex &&
-            Size == other.Size;
+            Size == other.Size &&
+            Equals(other.cxtShift, cxtShift);
 
-        public override int GetHashCode() => HashCode.Combine(Context, Allocator, BaseIndex, Size);
+        public override int GetHashCode() => HashCode.Combine(typeof(BFVar), Context.ID, Allocator, BaseIndex, Size, cxtShift);
     }
 }

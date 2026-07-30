@@ -2,7 +2,6 @@
 {
     public enum BFIOFormat
     {
-        None,
         ASCII,
         Numeric,
         DetaledNumeric
@@ -11,79 +10,81 @@
     internal class BFIRDebugger : BFIR
     {
         private readonly BFIOFormat IOFormat;
-        private readonly BFG env;
-        private readonly LoopValidator validator = new();
+        private readonly BFIRGen compiled;
 
-        private readonly Dictionary<int, int> memStatic = new();
-        private readonly Dictionary<int, int> memDynamic = new();
+        private readonly Dictionary<int, int> mem = new();
 
-        private int dynCxtPos = 0, cellPos = 0;
+        public override bool Debuggable => true;
 
-        public BFIRDebugger(BFG env, BFIOFormat IOFormat)
+        private int cxtPos = 0, cellPos = 0;
+        private int codeCursor = 0;
+
+        public BFIRDebugger(BFIRGen compiled, BFIOFormat IOFormat) : base(compiled.cfg)
         {
             this.IOFormat = IOFormat;
-            this.env = env;
+            this.compiled = compiled;
         }
 
-        internal int GetValue(int addr)
-        {
-            if (env.ActiveContext == env.staticCxt)
-            {
-                if (addr > env.staticCxt.MaxSize)
-                    return memDynamic.GetValueOrDefault(addr - env.staticCxt.MaxSize);
-                else
-                    return memStatic.GetValueOrDefault(addr);
-            }
-            else
-            {
-                if (addr + dynCxtPos < 0)
-                    return memStatic.GetValueOrDefault(env.staticCxt.MaxSize + addr);
-                else
-                    return memDynamic.GetValueOrDefault(addr + dynCxtPos);
-            }
-        }
-
-        private void SetValue(int val, int addr)
-        {
-            if (env.ActiveContext == env.staticCxt)
-            {
-                if (addr > env.staticCxt.MaxSize)
-                    memDynamic[addr - env.staticCxt.MaxSize] = val;
-                else
-                    memStatic[addr] = val;
-            }
-            else
-            {
-                if (addr + dynCxtPos < 0)
-                    memStatic[env.staticCxt.MaxSize + addr] = val;
-                else
-                    memDynamic[addr + dynCxtPos] = val;
-            }
-        }
-
+        internal int GetValue(int addr) => mem.GetValueOrDefault(addr + cxtPos);
+        private void SetValue(int val, int addr) => mem[addr + cxtPos] = val;
         private int GetCurrValue() => GetValue(cellPos);
         private void SetCurrValue(int val) => SetValue(val, cellPos);
 
-        public void While(Action code)
+        public override void While(Action code)
         {
-            validator.EnterLoop();
-            int iteration = 0;
+            codeCursor++; //skip loopStart IRInst
+            int startAddr = codeCursor;
 
             while (GetCurrValue() > 0)
             {
-                iteration++;
-                if (iteration > 1)
-                    validator.AdvanceIteration();
-                
+                codeCursor = startAddr;
                 code();
             }
 
-            validator.ExitLoop(iteration);
+            for (int depth = 1; depth > 0; codeCursor++) //skip loop and LoopEnd
+            {
+                if (compiled[codeCursor] is LoopStart)
+                    depth++;
+                else if (compiled[codeCursor] is LoopEnd)
+                    depth--;
+            }
         }
 
-        public void Add(IRInst inst)
+        protected override void _Add(IRInst inst)
         {
-            validator.ValidateInstruction(inst, currentIteration: 1);
+            if (codeCursor >= compiled.Count)
+            {
+                throw new InvalidOperationException(
+                    $"[BFG Pipeline Mismatch] Live run emitted an EXTRA instruction at step index {codeCursor}.\n" +
+                    $"Live instruction received: {inst}\n" +
+                    $"Expected: End of compiled bytecode sequence.\n\n" +
+                    $"Cause: Your high-level C# loop logic or contextual allocations generated " +
+                    $"more commands on this runtime iteration than during the shadow compile pass.");
+            }
+
+            var expectedInst = compiled[codeCursor];
+
+            if (!expectedInst.Equals(inst))
+            {
+                // Извлекаем детальную информацию о значениях прыжков и изменений
+                string expectedDetails = GetInstDebugDetails(expectedInst);
+                string actualDetails = GetInstDebugDetails(inst);
+
+                throw new InvalidOperationException(
+                    $"[BFG Pipeline Mismatch] Structural invariance broken at baseline index {codeCursor}!\n\n" +
+                    $"EXPECTED (Shadow Pass):\n" +
+                    $"  Type: {expectedInst.GetType().Name}\n" +
+                    $"  Data: {expectedDetails}\n\n" +
+                    $"RECEIVED (Live Run):\n" +
+                    $"  Type: {inst.GetType().Name}\n" +
+                    $"  Data: {actualDetails}\n\n" +
+                    $"Context Tracking State:\n" +
+                    $"  Current Window Base (cxtPos): {cxtPos}\n" +
+                    $"  Current Virtual Head (cellPos): {cellPos}\n" +
+                    $"  Calculated Memory Address: {cellPos + cxtPos}\n\n" +
+                    $"Error Check: Ensure that local C# variables, counters, or multi-pass allocations " +
+                    $"inside your While loop do not fluctuate or depend on the runtime loop iteration count.");
+            }
 
             switch (inst)
             {
@@ -91,20 +92,19 @@
                     {
                         var val = GetCurrValue();
                         val += c.val;
-                        val %= env.cellSize;
+                        val %= cfg.cellSize;
                         if (val < 0)
-                            val += env.cellSize;
+                            val += cfg.cellSize;
                         SetCurrValue(val);
                     }
                     break;
 
                 case MoveTo mv:
-                    cellPos = mv.relativePos;
+                    cellPos = ((MoveTo)expectedInst).relativePos;
                     break;
 
                 case ShiftContext sc:
-                    if (sc.newContext != env.staticCxt && env.ActiveContext != env.staticCxt)
-                        dynCxtPos += sc.shiftFromParentCxt();
+                    cxtPos += ((ShiftContext)expectedInst).shiftFromParentCxt.Invoke();
                     break;
 
                 case Print:
@@ -115,7 +115,7 @@
                         else if (IOFormat == BFIOFormat.Numeric)
                             Console.WriteLine($"Print: {val}");
                         else
-                            Console.WriteLine($"Print cell {cellPos}, context {env.ActiveContext.ID}: {val}");
+                            Console.WriteLine($"Print cell {cellPos}, context {ActiveContext.ID}: {val}");
                     }
                     break;
 
@@ -132,7 +132,7 @@
                     }
                     else
                     {
-                        Console.Write($"Read cell {cellPos}, context {env.ActiveContext.ID}: ");
+                        Console.Write($"Read cell {cellPos}, context {ActiveContext.ID}: ");
                         if (int.TryParse(Console.ReadLine(), out int val))
                             SetCurrValue(val);
                         else
@@ -143,87 +143,19 @@
                 default:
                     break;
             }
-        }
-    }
-    internal class LoopValidator
-    {
-        private readonly Stack<LoopValidationState> loopStates = new();
 
-        private class LoopValidationState
-        {
-            public List<IRInst> ExpectedSnapshots { get; } = new();
-            public int CurrentInstIndex { get; set; } = 0;
-            public bool IsFirstIteration { get; set; } = true;
+            codeCursor++;
         }
 
-        public void EnterLoop()
+        private string GetInstDebugDetails(IRInst inst)
         {
-            loopStates.Push(new LoopValidationState());
-        }
-
-        public void AdvanceIteration()
-        {
-            if (loopStates.Count == 0) return;
-
-            var state = loopStates.Peek();
-            state.CurrentInstIndex = 0;
-            state.IsFirstIteration = false;
-        }
-
-        public void ExitLoop(int actualIteration)
-        {
-            if (loopStates.Count == 0) return;
-
-            var state = loopStates.Pop();
-
-            // Check if the loop generated fewer instructions on its final iteration
-            if (!state.IsFirstIteration && state.CurrentInstIndex < state.ExpectedSnapshots.Count)
+            return inst switch
             {
-                throw new InvalidOperationException(
-                    $"Critical meta-generation mismatch! At iteration {actualIteration}, the loop execution " +
-                    $"terminated prematurely. Expected {state.ExpectedSnapshots.Count} instructions, " +
-                    $"but only received {state.CurrentInstIndex}. Your C# code inside the loop is not invariant!");
-            }
-        }
-
-        public void ValidateInstruction(IRInst inst, int currentIteration)
-        {
-            if (loopStates.Count == 0) return;
-
-            var state = loopStates.Peek();
-            var currentSnapshot = inst.Clone();
-
-            if (state.IsFirstIteration)
-            {
-                // Record the baseline on the very first iteration
-                state.ExpectedSnapshots.Add(currentSnapshot);
-            }
-            else
-            {
-                int index = state.CurrentInstIndex;
-
-                if (index >= state.ExpectedSnapshots.Count)
-                {
-                    throw new InvalidOperationException(
-                        $"Critical meta-generation mismatch! At loop iteration {currentIteration}, " +
-                        $"an unexpected EXTRA instruction of type '{inst.GetType().Name}' was generated. " +
-                        $"Your C# code state fluctuates across different runtime loop iterations.");
-                }
-
-                var expectedSnapshot = state.ExpectedSnapshots[index];
-
-                if (!currentSnapshot.Equals(expectedSnapshot))
-                {
-                    throw new InvalidOperationException(
-                        $"Critical pipeline variance detected! At loop iteration {currentIteration}, " +
-                        $"instruction payload at index {index} mutated.\n" +
-                        $"Expected: {expectedSnapshot}\n" +
-                        $"Received: {currentSnapshot}\n" +
-                        $"Ensure that C# variables or allocations inside the loop do not depend on the runtime iteration count.");
-                }
-
-                state.CurrentInstIndex++;
-            }
+                Change c => $"Value modification: {c.val}",
+                MoveTo mv => $"Local context allocation offset (relativePos): {mv.relativePos}, Defined target block variable: {mv.descriptor}",
+                ShiftContext sc => $"Global grid system shift delta (shiftFromParentCxt): {sc.shiftFromParentCxt.Invoke()}",
+                _ => inst.ToString() ?? inst.GetType().Name
+            };
         }
     }
 }

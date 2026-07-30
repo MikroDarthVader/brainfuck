@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics;
-using System.Drawing;
 
 namespace BFGo
 {
@@ -18,10 +17,10 @@ namespace BFGo
         {
             get
             {
-                if (owner.env.debugger == null)
+                if (!(owner.Context.ir is BFIRDebugger debugger))
                     return -1;
 
-                return owner.env.debugger.GetValue(owner.env.ActiveContext.Resolve(owner, offset));
+                return debugger.GetValue(debugger.ActiveContext.Resolve(owner, offset));
             }
         }
 
@@ -34,10 +33,10 @@ namespace BFGo
             this.offset = offset;
         }
 
-        private BFG env => owner.Context.env;
+        private BFIR env => owner.Context.ir;
 
         /// <summary>Emits a MoveTo that positions the tape on this cell.</summary>
-        private void MoveToThis() => env.AddInst(new MoveTo(owner, offset, owner.cxtShift));
+        private void MoveToThis() => env.Add(new MoveTo(owner, offset));
 
         // ─── Elementary operations ───────────────────────────────
 
@@ -51,7 +50,7 @@ namespace BFGo
                 return this;
 
             MoveToThis();
-            env.AddInst(new Change(val));
+            env.Add(new Change(val));
             return this;
         }
 
@@ -65,7 +64,7 @@ namespace BFGo
                 return this;
 
             MoveToThis();
-            env.AddInst(new Change(-val));
+            env.Add(new Change(-val));
             return this;
         }
 
@@ -78,7 +77,7 @@ namespace BFGo
             if (delta == 0) return this;
 
             MoveToThis();
-            env.AddInst(new Change(delta));
+            env.Add(new Change(delta));
             return this;
         }
 
@@ -88,7 +87,7 @@ namespace BFGo
         public BFCell Print() 
         { 
             MoveToThis(); 
-            env.AddInst(new Print());
+            env.Add(new Print());
             return this;
         }
 
@@ -98,7 +97,7 @@ namespace BFGo
         public BFCell Read() 
         { 
             MoveToThis(); 
-            env.AddInst(new Read());
+            env.Add(new Read());
             return this;
         }
 
