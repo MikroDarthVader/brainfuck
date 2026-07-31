@@ -44,29 +44,13 @@ namespace BFGo
         /// Adds <paramref name="val"/> to this cell.
         /// O(val).
         /// </summary>
-        public BFCell Plus(int val = 1)
-        {
-            if (val == 0)
-                return this;
-
-            MoveToThis();
-            env.Add(new Change(val));
-            return this;
-        }
+        public BFCell Plus(int val = 1) => Change(val);
 
         /// <summary>
         /// Subtracts <paramref name="val"/> from this cell.
         /// O(val).
         /// </summary>
-        public BFCell Minus(int val = 1)
-        {
-            if (val == 0)
-                return this;
-
-            MoveToThis();
-            env.Add(new Change(-val));
-            return this;
-        }
+        public BFCell Minus(int val = 1) => Change(-val);
 
         /// <summary>
         /// Changes this cell's value by the given delta.
@@ -77,7 +61,7 @@ namespace BFGo
             if (delta == 0) return this;
 
             MoveToThis();
-            env.Add(new Change(delta));
+            env.Add(new Change(delta % env.cfg.cellSize));
             return this;
         }
 
@@ -160,7 +144,7 @@ namespace BFGo
         /// Sets this cell to zero, then adds <paramref name="val"/>.
         /// O(n + val).
         /// </summary>
-        public BFCell Init(byte val = 0)
+        public BFCell Init(int val = 0)
         {
             While(() => { Minus(); });
             return Plus(val);
@@ -202,7 +186,11 @@ namespace BFGo
         /// </summary>
         public BFCell CopyTo(params BFCell?[] to)
         {
-            to = to.Where(dest => dest != null && !Equals(dest)).ToArray();
+            to = [.. to.Where(dest => dest != null /*&&
+                !(dest.offset == offset &&
+                  dest.owner.Equals(owner) &&
+                  dest.owner.Context.ID == owner.Context.ID)*/
+            )];
             using var tempDesc = env.ActiveContext.Alloc(AllocatorKind.Stack);
             var tmp = tempDesc[0];
 
@@ -269,8 +257,8 @@ namespace BFGo
         // ─── Equality ────────────────────────────────────────────
 
         public override bool Equals(object? obj)
-            => obj is BFCell other && owner.Equals(other.owner) && offset == other.offset;
+            => obj is BFCell other && offset == other.offset;
 
-        public override int GetHashCode() => HashCode.Combine(owner, offset);
+        public override int GetHashCode() => HashCode.Combine(typeof(BFCell), offset);
     }
 }

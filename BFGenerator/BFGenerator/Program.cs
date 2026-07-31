@@ -2,46 +2,51 @@
 
 class Program
 {
-    class TestProgram : BFGProgram
+    class Test : BFGProgram
     {
-        public TestProgram(int addrSize, int stackDens, int dataDens, int cellSize) : base(addrSize, stackDens, dataDens, cellSize) {}
+        public Test(int addrSize, int stackDens, int dataDens, int cellSize)
+            : base(addrSize, stackDens, dataDens, cellSize) { }
 
         public override void Code(BFG env)
         {
-            /*var cell = env.Alloc(AllocatorKind.Data)[0];
-            cell.Init(3).While(() =>
-            {
-                using var tmp = env.Alloc(AllocatorKind.Data);
-                tmp[0].Plus().Print();
-                cell.Minus().Print();
-                env.Break();
-            });*/
+            var tmp = env.Alloc(AllocatorKind.Data);
+            tmp[0].Init(5);
 
-            var tmp = env.Alloc(AllocatorKind.Data, 10);
-            tmp[7].Init(42).Print();
-            tmp[2].Print();
-            env.Go(env.Alloc(AllocatorKind.Data)[0].Init(3).owner, tmp);
-            env.Break();
-            tmp[7].Print();
-            tmp[2].Print();
+            env.Go(tmp);
+            env.Alloc(AllocatorKind.Data)[0].Init(42);
+            env.Go(null);
+
+            var input = env.Alloc(AllocatorKind.Data);
+            var ctr = env.Alloc(AllocatorKind.Stack);
+            ctr[0].Init(1);
+            input[0].Read();
+            env.Go(ctr, ctr, input); // Initial static-to-dynamic bootstrap transition produces a distinct code layout; handled outside the loop.
+            input[0].While(() =>
+            {
+                ctr[0].Plus();
+                input[0].Minus();
+
+                env.Alloc(AllocatorKind.Data)[0].Print();
+
+                env.Go(ctr, ctr, input);
+            });
         }
     }
 
     static void Main()
     {
-        var prg = new TestProgram(addrSize: 1, stackDens: 1, dataDens: 1, cellSize: 256);
+        var prg = new Test(addrSize: 1, stackDens: 1, dataDens: 1, cellSize: 256);
         prg.Debug(BFIOFormat.DetaledNumeric);
-
-        Compile(prg);
+        //Compile(prg, BFIOFormat.ASCII);
     }
 
-    static void Compile(BFGProgram prg)
+    static void Compile(BFGProgram prg, BFIOFormat IOFormat)
     {
         string code = prg.Compile();
         Console.WriteLine("=== Generated Brainfuck ===\n");
         Console.WriteLine(code);
         Console.WriteLine("\n=== Run ===\n");
-        RunBrainfuck(code, BFIOFormat.DetaledNumeric);
+        RunBrainfuck(code, IOFormat);
     }
 
     static void RunBrainfuck(string code, BFIOFormat format = BFIOFormat.ASCII)

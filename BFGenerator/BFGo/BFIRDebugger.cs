@@ -11,22 +11,61 @@
     {
         private readonly BFIOFormat IOFormat;
         private readonly BFIRGen compiled;
-
-        private readonly Dictionary<int, int> mem = new();
-
+        private readonly BFContext staticCxt;
+        
         public override bool Debuggable => true;
 
-        private int cxtPos = 0, cellPos = 0;
+        private readonly Dictionary<int, int> memStatic = new();
+        private readonly Dictionary<int, int> memDynamic = new();
+
+        private int dynCxtPos = 0, cellPos = 0;
         private int codeCursor = 0;
 
         public BFIRDebugger(BFIRGen compiled, BFIOFormat IOFormat) : base(compiled.cfg)
         {
             this.IOFormat = IOFormat;
             this.compiled = compiled;
+            staticCxt = ActiveContext;
         }
 
-        internal int GetValue(int addr) => mem.GetValueOrDefault(addr + cxtPos);
-        private void SetValue(int val, int addr) => mem[addr + cxtPos] = val;
+        internal int GetValue(int addr)
+        {
+            if (ActiveContext == staticCxt)
+            {
+                if (addr > staticCxt.MaxSize)
+                    return memDynamic.GetValueOrDefault(addr - staticCxt.MaxSize);
+                else
+                    return memStatic.GetValueOrDefault(addr);
+            }
+            else
+            {
+                addr += dynCxtPos;
+                if (addr < staticCxt.MaxSize)
+                    return memStatic.GetValueOrDefault(staticCxt.MaxSize + addr);
+                else
+                    return memDynamic.GetValueOrDefault(addr);
+            }
+        }
+
+        private void SetValue(int val, int addr)
+        {
+            if (ActiveContext == staticCxt)
+            {
+                if (addr > staticCxt.MaxSize)
+                    memDynamic[addr - staticCxt.MaxSize] = val;
+                else
+                    memStatic[addr] = val;
+            }
+            else
+            {
+                addr += dynCxtPos;
+                if (addr < staticCxt.MaxSize)
+                    memStatic[staticCxt.MaxSize + addr] = val;
+                else
+                    memDynamic[addr] = val;
+            }
+        }
+
         private int GetCurrValue() => GetValue(cellPos);
         private void SetCurrValue(int val) => SetValue(val, cellPos);
 
@@ -66,9 +105,26 @@
 
             if (!expectedInst.Equals(inst))
             {
-                // Извлекаем детальную информацию о значениях прыжков и изменений
+                string GetInstDebugDetails(IRInst inst)
+                {
+                    return inst switch
+                    {
+                        Change c => $"Value modification delta: {c.val}",
+                        MoveTo mv => $"Local layout memory offset (relativePos): {mv.relativePos}, Target variable descriptor: {mv.descriptor}",
+                        ShiftContext sc => $"Global context displacement (ShiftDelta): {sc.shiftFromParentCxt.Shift}, Target Context ID: {(sc.newContext != null ? sc.newContext.ID.ToString() : "Null (Relative)")}",
+                        _ => inst.ToString() ?? inst.GetType().Name
+                    };
+                }
+
                 string expectedDetails = GetInstDebugDetails(expectedInst);
                 string actualDetails = GetInstDebugDetails(inst);
+
+                bool isCurrentlyStatic = (ActiveContext == staticCxt);
+                string contextMode = isCurrentlyStatic ? "Static Root Context" : $"Dynamic Context (ID: {ActiveContext.ID})";
+
+                string contextShiftInfo = isCurrentlyStatic
+                    ? "None (operating on static base layout)"
+                    : $"{dynCxtPos} cells away from static root (dynamic window offset)";
 
                 throw new InvalidOperationException(
                     $"[BFG Pipeline Mismatch] Structural invariance broken at baseline index {codeCursor}!\n\n" +
@@ -79,9 +135,10 @@
                     $"  Type: {inst.GetType().Name}\n" +
                     $"  Data: {actualDetails}\n\n" +
                     $"Context Tracking State:\n" +
-                    $"  Current Window Base (cxtPos): {cxtPos}\n" +
-                    $"  Current Virtual Head (cellPos): {cellPos}\n" +
-                    $"  Calculated Memory Address: {cellPos + cxtPos}\n\n" +
+                    $"  Active Execution Mode: {contextMode}\n" +
+                    $"  Dynamic Window Shift (dynCxtPos): {contextShiftInfo}\n" +
+                    $"  Local Virtual Head   (cellPos): {cellPos}\n" +
+                    $"  Calculated Virtual Key (addr): {cellPos} (maps to dynamic dictionary base when out of static bounds)\n\n" +
                     $"Error Check: Ensure that local C# variables, counters, or multi-pass allocations " +
                     $"inside your While loop do not fluctuate or depend on the runtime loop iteration count.");
             }
@@ -100,11 +157,12 @@
                     break;
 
                 case MoveTo mv:
-                    cellPos = ((MoveTo)expectedInst).relativePos;
+                    cellPos = mv.relativePos;
                     break;
 
                 case ShiftContext sc:
-                    cxtPos += ((ShiftContext)expectedInst).shiftFromParentCxt.Invoke();
+                    if (sc.newContext != staticCxt && ActiveContext != staticCxt)
+                        dynCxtPos += sc.shiftFromParentCxt.Shift;
                     break;
 
                 case Print:
@@ -145,17 +203,6 @@
             }
 
             codeCursor++;
-        }
-
-        private string GetInstDebugDetails(IRInst inst)
-        {
-            return inst switch
-            {
-                Change c => $"Value modification: {c.val}",
-                MoveTo mv => $"Local context allocation offset (relativePos): {mv.relativePos}, Defined target block variable: {mv.descriptor}",
-                ShiftContext sc => $"Global grid system shift delta (shiftFromParentCxt): {sc.shiftFromParentCxt.Invoke()}",
-                _ => inst.ToString() ?? inst.GetType().Name
-            };
         }
     }
 }

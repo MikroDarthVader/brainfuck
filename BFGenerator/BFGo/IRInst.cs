@@ -80,7 +80,7 @@
             LateBoundSign = lateBoundSign;
         }
 
-        public int Invoke() => LazyProvider != null ? LazyProvider() : StaticShift;
+        public int Shift => LazyProvider != null ? LazyProvider() : StaticShift;
 
         public ShiftDescriptor Clone() => new ShiftDescriptor(StaticShift, LazyProvider, LateBoundSign);
 
@@ -116,9 +116,9 @@
         }
 
         public int relativePos => descriptor.Context.Resolve(descriptor, cellPos) +
-                                    (descriptor.isTransitional ? descriptor.cxtShift!.Invoke() : 0);
+                                    (descriptor.isTransitional ? descriptor.cxtShift!.Shift : 0);
 
-        public IRInst Clone() => new MoveTo(descriptor, cellPos);
+        public IRInst Clone() => new MoveTo(new BFVar(descriptor), cellPos);
 
         public override bool Equals(object? obj)
         {
@@ -159,13 +159,12 @@
         public override bool Equals(object? obj)
         {
             return obj is ShiftContext s &&
-                   Equals(s.newContext?.ID, newContext?.ID) &&
                    s.shiftFromParentCxt.Equals(shiftFromParentCxt);
         }
 
-        public override int GetHashCode() => HashCode.Combine(typeof(ShiftContext), newContext?.ID, shiftFromParentCxt.GetHashCode());
+        public override int GetHashCode() => HashCode.Combine(typeof(ShiftContext), shiftFromParentCxt.GetHashCode());
 
-        public string Compile(BFGen host) => host.BFShiftContext(shiftFromParentCxt.Invoke());
+        public string Compile(BFGen host) => host.BFShiftContext(shiftFromParentCxt.Shift);
 
         public override string ToString()
         {

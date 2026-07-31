@@ -109,6 +109,7 @@ namespace BFGo
 
             if (addrDest != null)
             {
+                //Break();
                 addrDest.CopyTo(movementType.Pos.From(movement));
                 if (!moveFromZero)
                 {
@@ -190,7 +191,7 @@ namespace BFGo
 
             isFirstStep.If(() =>
             {
-                BFRuntimeError bFRuntimeError = new BFRuntimeError(ir.ActiveContext, BFRuntimeError.ErrCode.ERR_SAME_PTR);
+                BFRuntimeError bFRuntimeError = new BFRuntimeError(this, BFRuntimeError.ErrCode.ERR_SAME_PTR);
             });
 
             foreach (var desc in moveFrom)

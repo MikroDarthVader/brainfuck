@@ -101,6 +101,10 @@ namespace BFGo
             Size = other.Size;
             Context = other.Context;
             Allocator = other.Allocator;
+            
+            IsAlive = other.IsAlive;
+            other.IsAlive = false;
+
             this.cxtShift = cxtShift;
         }
 
@@ -140,13 +144,13 @@ namespace BFGo
             for (int i = 0; i < Size; i++)
             {
                 var srcCell = this[i];
-                if (srcCell == null) continue;
                 foreach (var targetDesc in to)
                 {
                     if (i < targetDesc.Size)
                     {
                         var tgtCell = targetDesc[i];
-                        if (tgtCell != null) srcCell.CopyTo(tgtCell);
+                        if (tgtCell != null) 
+                            srcCell.CopyTo(tgtCell);
                     }
                 }
             }
@@ -198,6 +202,7 @@ namespace BFGo
         {
             for (int i = 0; i < Size; i++)
                 TryGet(i)?.Init();
+
         }
 
         /// <summary>Converts to array of cells.</summary>
@@ -210,17 +215,21 @@ namespace BFGo
         }
 
         /// <summary>
-        /// Replaces the contents of this descriptor with those of <paramref name="source"/>.
+        /// Replaces the contents of this descriptor with those of <paramref name="to"/>.
         /// Used to rebind user descriptors after a context switch.
         /// </summary>
-        internal void Rebind(BFVar source)
+        public void Rebind(BFVar to)
         {
-            BaseIndex = source.BaseIndex;
-            Size = source.Size;
-            Context = source.Context;
-            Allocator = source.Allocator;
-            cxtShift = source.cxtShift;
-            IsAlive = source.IsAlive;
+            Dispose();
+
+            BaseIndex = to.BaseIndex;
+            Size = to.Size;
+            Context = to.Context;
+            Allocator = to.Allocator;
+            cxtShift = to.cxtShift;
+            IsAlive = to.IsAlive;
+
+            to.IsAlive = false;
         }
 
         public void Dispose()
@@ -234,12 +243,11 @@ namespace BFGo
 
         public override bool Equals(object? obj) =>
             obj is BFVar other &&
-            Context.ID == other.Context.ID &&
             Allocator == other.Allocator &&
             BaseIndex == other.BaseIndex &&
             Size == other.Size &&
             Equals(other.cxtShift, cxtShift);
 
-        public override int GetHashCode() => HashCode.Combine(typeof(BFVar), Context.ID, Allocator, BaseIndex, Size, cxtShift);
+        public override int GetHashCode() => HashCode.Combine(typeof(BFVar), Allocator, BaseIndex, Size, cxtShift);
     }
 }
