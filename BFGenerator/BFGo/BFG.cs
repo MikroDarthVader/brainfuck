@@ -11,7 +11,7 @@ namespace BFGo
         internal readonly BFIR ir;
 
         public bool Debugging => ir.Debuggable;
-        internal BFGCfg cfg => ir.cfg;
+        public BFGCfg cfg => ir.cfg;
 
         internal readonly BFContext staticCxt;
 

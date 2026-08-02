@@ -173,7 +173,7 @@
                         else if (IOFormat == BFIOFormat.Numeric)
                             Console.WriteLine($"Print: {val}");
                         else
-                            Console.WriteLine($"Print cell {cellPos}, context {ActiveContext.ID}: {val}");
+                            Console.WriteLine($"Print cell {cellPos}, context {dynCxtPos}: {val}");
                     }
                     break;
 
@@ -190,7 +190,7 @@
                     }
                     else
                     {
-                        Console.Write($"Read cell {cellPos}, context {ActiveContext.ID}: ");
+                        Console.Write($"Read cell {cellPos}, context {dynCxtPos}: ");
                         if (int.TryParse(Console.ReadLine(), out int val))
                             SetCurrValue(val);
                         else
