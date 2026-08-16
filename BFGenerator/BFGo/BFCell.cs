@@ -207,8 +207,8 @@ namespace BFGo
         /// Destructive for both cells.
         /// Subtracts the smaller value from both.
         /// After call:
-        ///   if self >= right : self = self - right,  right = 0
-        ///   if self &lt; right  : self = 0,            right = right - self
+        ///   if self >= right : self = self - right, right = 0
+        ///   if self &lt; right : self = 0, right = right - self
         /// O(n2).
         /// </summary>
         public static void Compare(BFCell left, BFCell right)

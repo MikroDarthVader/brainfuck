@@ -9,26 +9,26 @@ class Program
 
         public override void Code(BFG env)
         {
-            var tmp = env.Alloc(AllocatorKind.Data);
+            var tmp = env.AllocData();
             tmp[0].Init(5);
 
-            env.Go(tmp);
-            env.Alloc(AllocatorKind.Data)[0].Init(42);
-            env.Go(null);
+            env.GoFromStatic(addr: tmp);
+            env.AllocData()[0].Init(42);
+            env.GoStatic();
 
-            var input = env.Alloc(AllocatorKind.Data);
-            var ctr = env.Alloc(AllocatorKind.Stack);
+            var input = env.AllocData();
+            var ctr = env.AllocStack();
             ctr[0].Init(1);
             input[0].Read();
-            env.Go(ctr, ctr, input); // Initial static-to-dynamic bootstrap transition produces a distinct code layout; handled outside the loop.
+            env.GoFromStatic(addr: ctr, move: [ctr, input]);
             input[0].While(() =>
             {
                 ctr[0].Plus();
                 input[0].Minus();
 
-                env.Alloc(AllocatorKind.Data)[0].Print();
+                env.AllocData()[0].Print();
 
-                env.Go(ctr, ctr, input);
+                env.Go(addr: ctr, move: [ctr, input]);
             });
         }
     }
@@ -36,8 +36,8 @@ class Program
     static void Main()
     {
         var prg = new Test(addrSize: 1, stackDens: 1, dataDens: 1, cellSize: 256);
-        prg.Debug(BFIOFormat.DetaledNumeric);
-        //Compile(prg, BFIOFormat.ASCII);
+        //prg.Debug(BFIOFormat.DetaledNumeric);
+        Compile(prg, BFIOFormat.DetaledNumeric);
     }
 
     static void Compile(BFGProgram prg, BFIOFormat IOFormat)
