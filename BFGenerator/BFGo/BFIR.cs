@@ -8,11 +8,13 @@
 
         internal BFContext ActiveContext { get; private protected set; }
         internal readonly BFGCfg cfg;
+        internal readonly BFGProgram env;
 
-        internal BFIR(BFGCfg cfg)
+        internal BFIR(BFGCfg cfg, BFGProgram env)
         {
             this.cfg = cfg;
             ActiveContext = CreateCxt();
+            this.env = env;
         }
 
         internal void Add(IRInst inst)
@@ -40,7 +42,7 @@
         public override bool Debuggable => false;
         private List<IRInst> insts = new List<IRInst>();
 
-        public BFIRGen(BFGCfg cfg) : base(cfg) { }
+        public BFIRGen(BFGCfg cfg, BFGProgram env) : base(cfg, env) { }
 
         public string Compile()
         {

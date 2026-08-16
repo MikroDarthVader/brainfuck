@@ -10,7 +10,7 @@
     /// Memory context. Allocators are organised in repeating blocks
     /// Logical indices are mapped linearly into this repeating layout.
     /// </summary>
-    public class BFContext
+    internal class BFContext
     {
         private class BFAllocator
         {

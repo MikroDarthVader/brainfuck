@@ -9,14 +9,9 @@ namespace BFGo
     [DebuggerDisplay("{DebugDisplay,nq}")]
     public class BFVar : IDisposable
     {
-        /// <summary>Owning context.</summary>
-        public BFContext Context { get; private set; }
 
         /// <summary>Allocator kind (Stack or Data).</summary>
         public AllocatorKind Allocator { get; private set; }
-
-        /// <summary>Start index inside the allocator.</summary>
-        internal int BaseIndex { get; private protected set; }
 
         /// <summary>Number of cells.</summary>
         public int Size { get; private protected set; }
@@ -29,6 +24,15 @@ namespace BFGo
 
         /// <summary>True if the memory block is active and has not been disposed.</summary>
         public bool IsAlive { get; private set; }
+
+        public BFGProgram env => Context.ir.env;
+
+
+        /// <summary>Owning context.</summary>
+        internal BFContext Context { get; private set; }
+
+        /// <summary>Start index inside the allocator.</summary>
+        internal int BaseIndex { get; private protected set; }
 
         /// <summary>Optional context shift for cross-context access.</summary>
         internal ShiftDescriptor? cxtShift;

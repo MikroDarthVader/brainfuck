@@ -1,12 +1,10 @@
-﻿using System.Diagnostics;
-
-namespace BFGo
+﻿namespace BFGo
 {
     /// <summary>
     /// Main compiler facade. Manages static and dynamic contexts, pointer-based
     /// transitions and compilation of IR into Brainfuck code.
     /// </summary>
-    public class BFG
+    internal class BFG
     {
         internal readonly BFIR ir;
 
@@ -33,46 +31,54 @@ namespace BFGo
             addr = null;
         }
 
-        public BFVar Alloc(AllocatorKind kind, int size = 1) => ir.ActiveContext.Alloc(kind, size);
-        public BFVar AllocData(int size = 1) => Alloc(AllocatorKind.Data, size);
-        public BFVar AllocStack(int size = 1) => Alloc(AllocatorKind.Stack, size);
-
-        [DebuggerHidden]
-        public void Break() 
-        {
-            if (Debugging && Debugger.IsAttached)
-                Debugger.Break();
-        }
-
         /// <summary>
         /// Initial transition from the root static context into a dynamic context.
         /// Must be called exactly once before any subsequent dynamic-to-dynamic transitions.
         /// </summary>
-        /// <param name="addr">Descriptor containing the target address (the value of this cell determines which dynamic context to enter).</param>
+        /// <param name="addrDest">Descriptor containing the target address (the value of this cell determines which dynamic context to enter).</param>
         /// <param name="move">Optional variables to carry over into the new dynamic context. Their values are preserved and they become bound to the new context.</param>
         /// <exception cref="InvalidOperationException">Thrown if the current context is not the static root.</exception>
-        public void GoFromStatic(BFVar addr, BFVar[]? move = null)
+        internal void GoFromStatic(BFVar addrDest, BFVar[]? move = null)
         {
             if (ir.ActiveContext != staticCxt)
                 throw new InvalidOperationException(
                     "GoFromStatic can only be invoked from the root static context. " +
                     "For subsequent transitions between dynamic contexts, use Go().");
-            _Go(addr, move);
+
+            move ??= [];
+            var moveFrom = move.OrderBy(x => x.BaseIndex).ToList();
+
+            var zeroCxt = ir.CreateCxt();
+            addr = zeroCxt.Alloc(AllocatorKind.Stack, cfg.addrSize);
+            flags = zeroCxt.Alloc(AllocatorKind.Stack, 2);
+            movement = zeroCxt.Alloc(AllocatorKind.Stack, movementType.Size);
+
+            foreach (var desc in moveFrom)
+                desc.Rebind(desc.ApplyShift(() => -staticCxt.MaxSize));
+
+            ir.Add(new ShiftContext(() => staticCxt.MaxSize, zeroCxt));
+            addr.Init();
+
+            GoByPtr(addrDest.ApplyShift(() => -staticCxt.MaxSize), moveFrom, true);
         }
 
         /// <summary>
         /// Transition between dynamic contexts using an address stored in a cell.
         /// </summary>
-        /// <param name="addr">Descriptor whose current value is the target context address.</param>
+        /// <param name="addrDest">Descriptor whose current value is the target context address.</param>
         /// <param name="move">Variables to carry forward into the destination dynamic context. They are rebound to the new context without losing their values.</param>
         /// <exception cref="InvalidOperationException">Thrown if called from the static root context (use GoFromStatic instead).</exception>
-        public void Go(BFVar addr, BFVar[]? move = null)
+        internal void Go(BFVar addrDest, BFVar[]? move = null)
         {
             if (ir.ActiveContext == staticCxt)
                 throw new InvalidOperationException(
                     "Go cannot be called from the static context. " +
                     "For the initial transition from static to dynamic, use GoFromStatic().");
-            _Go(addr, move);
+
+            move ??= [];
+            var moveFrom = move.OrderBy(x => x.BaseIndex).ToList();
+
+            GoByPtr(addrDest, moveFrom);
         }
 
         /// <summary>
@@ -80,48 +86,18 @@ namespace BFGo
         /// </summary>
         /// <param name="move">Variables to bring back to the static context. They are rebound to fresh allocations in the static root.</param>
         /// <exception cref="InvalidOperationException">Thrown if already in the static context, or if invoked without having a dynamic frame.</exception>
-        public void GoStatic(BFVar[]? move = null)
+        internal void GoStatic(BFVar[]? move = null)
         {
             if (ir.ActiveContext == staticCxt)
                 throw new InvalidOperationException(
                     "GoStatic is only valid from a dynamic context. " +
                     "Use GoFromStatic() or Go() to navigate between dynamic contexts.");
-            _Go(null, move);
-        }
 
-        /// <summary>
-        /// Internal transition dispatcher.
-        /// </summary>
-        /// <param name="addr">Target address descriptor; if null, the transition is a return to static.</param>
-        /// <param name="move">Variables to transfer between contexts.</param>
-        private void _Go(BFVar? addr, BFVar[]? move = null)
-        {
             move ??= [];
             var moveFrom = move.OrderBy(x => x.BaseIndex).ToList();
-            if (addr != null)
-            {
-                if (ir.ActiveContext == staticCxt)
-                {
-                    GoDynamic(moveFrom);
-                    GoByPtr(addr.ApplyShift(() => -staticCxt.MaxSize), moveFrom, true);
-                }
-                else
-                    GoByPtr(addr, moveFrom);
-            }
-            else
-            {
-                if (ir.ActiveContext == staticCxt)
-                    throw new InvalidOperationException("Execution State Violation: Attempted to perform a static rollback transition (Go(null)), " +
-                        "but the compiler is already operating inside the root static context. " +
-                        "Ensure you only return to static from an active dynamic frame.");
 
-                GoByPtr(addr, moveFrom);
-                GoStatic(moveFrom);
-            }
-        }
+            GoByPtr(null, moveFrom);
 
-        private void GoStatic(List<BFVar> moveFrom)
-        {
             foreach (BFVar desc in moveFrom)
             {
                 BFVar tmp = staticCxt.Alloc(AllocatorKind.Stack, desc.Size);
@@ -133,21 +109,6 @@ namespace BFGo
             addr = movement = flags = null;
         }
 
-        private void GoDynamic(List<BFVar> moveFrom)
-        {
-            var zeroCxt = ir.CreateCxt();
-            addr = zeroCxt.Alloc(AllocatorKind.Stack, cfg.addrSize);
-            flags = zeroCxt.Alloc(AllocatorKind.Stack, 2);
-            movement = zeroCxt.Alloc(AllocatorKind.Stack, movementType.Size);
-
-            foreach (var desc in moveFrom)
-                desc.Rebind(desc.ApplyShift(() => -staticCxt.MaxSize));
-
-            ir.Add(new ShiftContext(() => staticCxt.MaxSize, zeroCxt));
-
-            addr.Init();
-        }
-
         private void GoByPtr(BFVar? addrDest,
                              List<BFVar> moveFrom, bool moveFromZero = false)
         {
@@ -156,7 +117,6 @@ namespace BFGo
 
             if (addrDest != null)
             {
-                //Break();
                 addrDest.CopyTo(movementType.Pos.From(movement));
                 if (!moveFromZero)
                 {
@@ -236,9 +196,9 @@ namespace BFGo
                 }
             }
 
-            isFirstStep.If(() =>
+            _ = isFirstStep.If(() =>
             {
-                BFRuntimeError bFRuntimeError = new BFRuntimeError(this, BFRuntimeError.ErrCode.ERR_SAME_PTR);
+                _ = new BFRuntimeError(ir.env, BFRuntimeError.ErrCode.ERR_SAME_PTR);
             });
 
             foreach (var desc in moveFrom)

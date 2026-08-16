@@ -12,6 +12,7 @@ namespace BFGo
     {
         public readonly BFVar owner;
         public readonly int offset;
+        public BFGProgram env => owner.env;
 
         private int DebugValue
         {
@@ -32,11 +33,11 @@ namespace BFGo
             owner = descriptor;
             this.offset = offset;
         }
-
-        private BFIR env => owner.Context.ir;
+        
+        private BFIR ir => owner.Context.ir;
 
         /// <summary>Emits a MoveTo that positions the tape on this cell.</summary>
-        private void MoveToThis() => env.Add(new MoveTo(owner, offset));
+        private void MoveToThis() => ir.Add(new MoveTo(owner, offset));
 
         // ─── Elementary operations ───────────────────────────────
 
@@ -61,7 +62,7 @@ namespace BFGo
             if (delta == 0) return this;
 
             MoveToThis();
-            env.Add(new Change(delta % env.cfg.cellSize));
+            ir.Add(new Change(delta % ir.cfg.cellSize));
             return this;
         }
 
@@ -71,7 +72,7 @@ namespace BFGo
         public BFCell Print() 
         { 
             MoveToThis(); 
-            env.Add(new Print());
+            ir.Add(new Print());
             return this;
         }
 
@@ -81,7 +82,7 @@ namespace BFGo
         public BFCell Read() 
         { 
             MoveToThis(); 
-            env.Add(new Read());
+            ir.Add(new Read());
             return this;
         }
 
@@ -94,7 +95,7 @@ namespace BFGo
         public BFCell While(Action code)
         {
             MoveToThis();
-            env.While(() => { code(); MoveToThis(); });
+            ir.While(() => { code(); MoveToThis(); });
 
             return this;
         }
@@ -124,7 +125,7 @@ namespace BFGo
         /// <param name="codeElse"></param>
         public BFCell IfElse(Action codeIf, Action codeElse)
         {
-            var tmp = env.ActiveContext.Alloc(AllocatorKind.Stack, 1);
+            using var tmp = ir.ActiveContext.Alloc(AllocatorKind.Stack, 1);
             tmp[0].Init(1);
             If(() =>
             {
@@ -191,7 +192,7 @@ namespace BFGo
                   dest.owner.Equals(owner) &&
                   dest.owner.Context.ID == owner.Context.ID)*/
             )];
-            using var tempDesc = env.ActiveContext.Alloc(AllocatorKind.Stack);
+            using var tempDesc = ir.ActiveContext.Alloc(AllocatorKind.Stack);
             var tmp = tempDesc[0];
 
             to = to.Append(tmp).ToArray();   // include temp in targets
@@ -214,7 +215,7 @@ namespace BFGo
         public static void Compare(BFCell left, BFCell right)
         {
             // Three temporary cells for the algorithm
-            using var locals = left.env.ActiveContext.Alloc(AllocatorKind.Stack, 3);
+            using var locals = left.ir.ActiveContext.Alloc(AllocatorKind.Stack, 3);
             BFCell[] tmp = locals.ToArray();
             var flagB = tmp[0];   // 1 if other may be non‑zero in current iteration
             var counterB = tmp[1];   // counts successful decrements of other

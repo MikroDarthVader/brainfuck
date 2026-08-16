@@ -14,9 +14,9 @@
         /// <summary>
         /// Emits a runtime crash trap. Prints the error code and locks the execution thread.
         /// </summary>
-        public BFRuntimeError(BFG env, ErrCode error)
+        public BFRuntimeError(BFGProgram env, ErrCode error)
         {
-            using var errorCellDesc = env.Alloc(AllocatorKind.Stack, 1);
+            using var errorCellDesc = env.AllocStack();
             var errorCell = errorCellDesc[0];
 
             errorCell.Init((byte)error);

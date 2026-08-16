@@ -7,28 +7,28 @@ class Program
         public Test(int addrSize, int stackDens, int dataDens, int cellSize)
             : base(addrSize, stackDens, dataDens, cellSize) { }
 
-        public override void Code(BFG env)
+        public override void Code()
         {
-            var tmp = env.AllocData();
+            using var tmp = AllocStack();
             tmp[0].Init(5);
 
-            env.GoFromStatic(addr: tmp);
-            env.AllocData()[0].Init(42);
-            env.GoStatic();
+            GoFromStatic(addr: tmp);
+            AllocData()[0].Init(42);
+            GoStatic();
 
-            var input = env.AllocData();
-            var ctr = env.AllocStack();
+            var input = AllocData();
+            var ctr = AllocStack();
             ctr[0].Init(1);
             input[0].Read();
-            env.GoFromStatic(addr: ctr, move: [ctr, input]);
+            GoFromStatic(addr: ctr, move: [ctr, input]);
             input[0].While(() =>
             {
                 ctr[0].Plus();
                 input[0].Minus();
 
-                env.AllocData()[0].Print();
+                AllocData()[0].Print();
 
-                env.Go(addr: ctr, move: [ctr, input]);
+                Go(addr: ctr, move: [ctr, input]);
             });
         }
     }
@@ -36,7 +36,7 @@ class Program
     static void Main()
     {
         var prg = new Test(addrSize: 1, stackDens: 1, dataDens: 1, cellSize: 256);
-        //prg.Debug(BFIOFormat.DetaledNumeric);
+        prg.Debug(BFIOFormat.DetaledNumeric);
         Compile(prg, BFIOFormat.DetaledNumeric);
     }
 

@@ -21,7 +21,7 @@
         private int dynCxtPos = 0, cellPos = 0;
         private int codeCursor = 0;
 
-        public BFIRDebugger(BFIRGen compiled, BFIOFormat IOFormat) : base(compiled.cfg)
+        public BFIRDebugger(BFIRGen compiled, BFIOFormat IOFormat) : base(compiled.cfg, compiled.env)
         {
             this.IOFormat = IOFormat;
             this.compiled = compiled;
