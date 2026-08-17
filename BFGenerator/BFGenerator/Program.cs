@@ -1,4 +1,5 @@
 ﻿using BFGo;
+using BFTypeSmart;
 
 class Program
 {
@@ -9,35 +10,30 @@ class Program
 
         public override void Code()
         {
-            using var tmp = AllocStack();
-            tmp[0].Init(5);
+            using var tmp = AllocStack(6);
+            BFaddressType bFaddressType6 = new BFaddressType(3);
+            BFUIntType bFUIntType3 = new BFUIntType(3);
 
-            GoFromStatic(addr: tmp);
-            AllocData()[0].Init(42);
-            GoStatic();
+            tmp[0].Init(100);
+            tmp[1].Init();
+            tmp[2].Init();
 
-            var input = AllocData();
-            var ctr = AllocStack();
-            ctr[0].Init(1);
-            input[0].Read();
-            GoFromStatic(addr: ctr, move: [ctr, input]);
-            input[0].While(() =>
-            {
-                ctr[0].Plus();
-                input[0].Minus();
+            tmp[3].Init(10);
+            tmp[4].Init(255);
+            tmp[5].Init();
 
-                AllocData()[0].Print();
-
-                Go(addr: ctr, move: [ctr, input]);
-            });
+            bFaddressType6.shorten(tmp);
+            bFUIntType3.Print256(bFaddressType6.Pos.From(tmp));
+            CellFunc.StringPrint(tmp, "\n");
+            bFUIntType3.Print256(bFaddressType6.Neg.From(tmp));
         }
     }
 
     static void Main()
     {
         var prg = new Test(addrSize: 1, stackDens: 1, dataDens: 1, cellSize: 256);
-        prg.Debug(BFIOFormat.DetaledNumeric);
-        Compile(prg, BFIOFormat.DetaledNumeric);
+        //prg.Debug(BFIOFormat.DetaledNumeric);
+        Compile(prg, BFIOFormat.ASCII);
     }
 
     static void Compile(BFGProgram prg, BFIOFormat IOFormat)
