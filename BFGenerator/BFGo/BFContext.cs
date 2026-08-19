@@ -1,133 +1,207 @@
-﻿namespace BFGo
+﻿using System.Drawing;
+
+namespace BFGo
 {
-    public enum AllocatorKind
+    internal class BFContextMem(BFContext owningCxt)
     {
-        Stack,
-        Data
+        public readonly BFContext owningCxt = owningCxt;
+    }
+
+    /// <summary>
+    /// Best‑fit memory allocator for linear address space.
+    /// Supports arbitrary free order; coalesces adjacent free blocks.
+    /// </summary>
+    internal class BFAllocator : BFContextMem
+    {
+        private readonly SortedDictionary<int, int> freeBlocks = []; // key = start, value = size
+        private int _size;
+        internal int MaxSize { get; private set; }
+        internal int Size => _size;
+
+        // ---- Public API ----
+
+        internal BFAllocator(BFContext owner) : base(owner) { }
+
+        /// <summary>Allocates a contiguous block of at least <paramref name="requestSize"/> cells.</summary>
+        /// <returns>Start address of the allocated block.</returns>
+        internal int Alloc(int requestSize)
+        {
+            if (requestSize <= 0)
+                throw new ArgumentException("Request size must be positive.", nameof(requestSize));
+
+            var best = FindBestFit(requestSize);
+            if (best.HasValue)
+                return AllocateFromBlock(best.Value.start, best.Value.size, requestSize);
+
+            // No free block – extend the area
+            int newStart = _size;
+            _size += requestSize;
+            if (_size > MaxSize) MaxSize = _size;
+            return newStart;
+        }
+
+        /// <summary>
+        /// Returns a block to the free pool.
+        /// Validates bounds and detects overlaps (e.g. double free).
+        /// Merges with adjacent free blocks if any.
+        /// </summary>
+        internal void Free(int start, int size)
+        {
+            if (size <= 0)
+                throw new ArgumentException("Block size must be positive.", nameof(size));
+
+            ValidateFreeBlock(start, size);
+            freeBlocks.Add(start, size);
+            CoalesceFreeBlocks();
+            ShrinkIfPossible();
+        }
+
+        // ---- Private helpers ----
+
+        /// <summary>Finds the smallest free block that can accommodate the request.</summary>
+        private (int start, int size)? FindBestFit(int requestSize)
+        {
+            int bestStart = -1;
+            int bestSize = int.MaxValue;
+
+            foreach (var kvp in freeBlocks)
+            {
+                int start = kvp.Key;
+                int size = kvp.Value;
+                if (size >= requestSize && size < bestSize)
+                {
+                    bestSize = size;
+                    bestStart = start;
+                    if (size == requestSize) // perfect match
+                        break;
+                }
+            }
+
+            return bestStart != -1 ? (bestStart, bestSize) : null;
+        }
+
+        /// <summary>Removes the chosen block and returns the remainder if any.</summary>
+        private int AllocateFromBlock(int start, int size, int requestSize)
+        {
+            freeBlocks.Remove(start);
+            int remainder = size - requestSize;
+            if (remainder > 0)
+                freeBlocks.Add(start + requestSize, remainder);
+            return start;
+        }
+
+        /// <summary>Performs bounds and overlap checks before inserting a free block.</summary>
+        private void ValidateFreeBlock(int start, int size)
+        {
+            // Bounds check
+            if (start < 0 || start + size > _size)
+                throw new InvalidOperationException(
+                    $"Block [{start}, {start + size}) outside allocated area [0, {_size}).");
+
+            // Find neighbouring free blocks
+            var (prevKey, nextKey) = FindNeighbourKeys(start);
+
+            // Overlap with previous block
+            if (prevKey.HasValue)
+            {
+                int prevStart = prevKey.Value;
+                int prevSize = freeBlocks[prevStart];
+                if (start < prevStart + prevSize)
+                    throw new InvalidOperationException(
+                        $"Block [{start}, {start + size}) overlaps with free block [{prevStart}, {prevStart + prevSize}).");
+            }
+
+            // Overlap with next block
+            if (nextKey.HasValue)
+            {
+                int nextStart = nextKey.Value;
+                int nextSize = freeBlocks[nextStart];
+                if (start + size > nextStart)
+                    throw new InvalidOperationException(
+                        $"Block [{start}, {start + size}) overlaps with free block [{nextStart}, {nextStart + nextSize}).");
+            }
+        }
+
+        /// <summary>Finds the keys of the free blocks immediately before and after the given start.</summary>
+        private (int? prev, int? next) FindNeighbourKeys(int start)
+        {
+            int? prev = null;
+            int? next = null;
+
+            // Since SortedDictionary is ordered, we can iterate once.
+            foreach (int key in freeBlocks.Keys)
+            {
+                if (key < start)
+                    prev = key;
+                else if (key > start)
+                {
+                    next = key;
+                    break;
+                }
+                // if key == start, it will be caught by overlap check later
+            }
+
+            return (prev, next);
+        }
+
+        /// <summary>Coalesces adjacent free blocks by rebuilding the dictionary.</summary>
+        private void CoalesceFreeBlocks()
+        {
+            if (freeBlocks.Count == 0) return;
+
+            var merged = new List<(int start, int size)>(freeBlocks.Count);
+            foreach (var kvp in freeBlocks)
+            {
+                int curStart = kvp.Key;
+                int curSize = kvp.Value;
+                if (merged.Count > 0 && merged[^1].start + merged[^1].size == curStart)
+                {
+                    var (start, size) = merged[^1];
+                    merged[^1] = (start, size + curSize);
+                }
+                else
+                {
+                    merged.Add((curStart, curSize));
+                }
+            }
+
+            freeBlocks.Clear();
+            foreach (var (start, size) in merged)
+                freeBlocks.Add(start, size);
+        }
+
+        /// <summary>Shrinks the allocation size if the last block ends at _size.</summary>
+        private void ShrinkIfPossible()
+        {
+            if (freeBlocks.Count == 0) return;
+
+            int lastStart = freeBlocks.Keys.Last();
+            int lastSize = freeBlocks[lastStart];
+            if (lastStart + lastSize == _size)
+            {
+                _size = lastStart;
+                freeBlocks.Remove(lastStart);
+            }
+        }
     }
 
     /// <summary>
     /// Memory context. Allocators are organised in repeating blocks
     /// Logical indices are mapped linearly into this repeating layout.
     /// </summary>
-    internal class BFContext
+    internal abstract class BFContext
     {
-        private class BFAllocator
-        {
-            private readonly SortedDictionary<int, int> activeBlocks = [];
-            private readonly SortedDictionary<int, int> pendingFree = [];
-
-            private int _size;
-            public int MaxSize { get; private set; }
-            public int Size
-            {
-                get => _size;
-                private set
-                {
-                    _size = value;
-                    if (_size > MaxSize)
-                        MaxSize = _size;
-                }
-            }
-
-            public int Alloc(int allocSize)
-            {
-                if (allocSize <= 0)
-                    throw new ArgumentException("Allocation size must be > 0");
-
-                foreach (var kvp in pendingFree)
-                {
-                    int freeIndex = kvp.Key;
-                    int freeSize = kvp.Value;
-
-                    if (freeSize >= allocSize)
-                    {
-                        pendingFree.Remove(freeIndex);
-
-                        if (freeSize > allocSize)
-                        {
-                            int remainderIndex = freeIndex + allocSize;
-                            int remainderSize = freeSize - allocSize;
-                            pendingFree[remainderIndex] = remainderSize;
-                        }
-
-                        activeBlocks[freeIndex] = allocSize;
-                        return freeIndex;
-                    }
-                }
-
-                int index = Size;
-                Size += allocSize;
-                activeBlocks[index] = allocSize;
-                return index;
-            }
-
-            public void Free(int logicalIndex, int blockSize)
-            {
-                if (!activeBlocks.TryGetValue(logicalIndex, out int actualSize))
-                    throw new InvalidOperationException(
-                        $"Cannot free block at index {logicalIndex}: no such active block.");
-
-                if (actualSize != blockSize)
-                    throw new InvalidOperationException(
-                        $"Size mismatch: block at {logicalIndex} has size {actualSize}, but tried to free with size {blockSize}.");
-
-                activeBlocks.Remove(logicalIndex);
-
-                pendingFree[logicalIndex] = blockSize;
-
-                var keys = pendingFree.Keys.ToList();
-                for (int i = 0; i < keys.Count - 1; i++)
-                {
-                    int currentIdx = keys[i];
-                    int currentSize = pendingFree[currentIdx];
-                    int nextIdx = keys[i + 1];
-
-                    if (currentIdx + currentSize == nextIdx)
-                    {
-                        pendingFree[currentIdx] = currentSize + pendingFree[nextIdx];
-                        pendingFree.Remove(nextIdx);
-                        keys.RemoveAt(i + 1);
-                        i--;
-                    }
-                }
-
-                while (pendingFree.Count > 0)
-                {
-                    var last = pendingFree.Last();
-                    int pendingIndex = last.Key;
-                    int pendingSize = last.Value;
-
-                    if (pendingIndex + pendingSize == Size)
-                    {
-                        pendingFree.Remove(pendingIndex);
-                        Size -= pendingSize;
-                    }
-                    else
-                        break;
-                }
-            }
-        }
-
         internal readonly BFIR ir;
-        public BFGCfg cfg => ir.cfg;
+        internal BFGCfg cfg => ir.cfg;
+        internal readonly int ID;
 
-        private readonly BFAllocator[] allocators;
-
-        public readonly int ID;
-
-        /// <summary>Current maximum sizes of the allocators .</summary>
-        public int MaxSize => cfg.BlockSize * allocators.Max(x => x.MaxSize);
+        protected readonly BFAllocator allocator;
 
         internal BFContext(BFIR ir, int ID)
         {
-            int count = Enum.GetValues<AllocatorKind>().Length;
-            allocators = new BFAllocator[count];
-            allocators[(int)AllocatorKind.Stack] = new BFAllocator();
-            allocators[(int)AllocatorKind.Data] = new BFAllocator();
-
             this.ir = ir;
             this.ID = ID;
+            allocator = new BFAllocator(this);
         }
 
         /// <summary>
@@ -135,33 +209,27 @@
         /// </summary>
         internal int Resolve(BFVar descriptor, int logicalIndex)
         {
-            if (descriptor.Context != this)
+            if (descriptor.owningMem.owningCxt != this)
             {
                 if (descriptor.isTransitional)
-                    return descriptor.Context.Resolve(descriptor, logicalIndex);
+                    return descriptor.owningMem.owningCxt.Resolve(descriptor, logicalIndex);
                 else
                     throw new InvalidOperationException($"Cannot access descriptor " +
-                        $"from context '{descriptor.Context.ID}' in current context '{ID}'.");
+                        $"from context '{descriptor.owningMem.owningCxt.ID}' in current context '{ID}'.");
             }
-            return ResolveAddr(descriptor.Allocator, descriptor.BaseIndex + logicalIndex);
+
+            return MemMap(descriptor.owningMem, descriptor.BaseIndex + logicalIndex);
         }
 
-        private int ResolveAddr(AllocatorKind kind, int logicalIndex)
-        {
-            if (kind == AllocatorKind.Stack)
-                return (logicalIndex / cfg.stackDens) * cfg.BlockSize + logicalIndex % cfg.stackDens + cfg.dataDens;
-            else
-                return (logicalIndex / cfg.dataDens) * cfg.BlockSize + logicalIndex % cfg.dataDens;
-        }
+        protected abstract int MemMap(BFContextMem memMap, int logicalIndex);
 
         /// <summary>
         /// Allocates a block in the given allocator and returns a root descriptor.
         /// </summary>
-        internal BFVar Alloc(AllocatorKind kind, int size = 1)
+        internal BFVar Alloc(int size = 1)
         {
-            var allocator = allocators[(int)kind];
             int index = allocator.Alloc(size);
-            return new BFVar(this, kind, index, size);
+            return new BFVar(allocator, index, size, true);
         }
 
         /// <summary>
@@ -169,9 +237,49 @@
         /// </summary>
         internal void Free(BFVar descriptor)
         {
-            if (descriptor.Context != this)
+            if (descriptor.owningMem != allocator)
                 throw new InvalidOperationException("Descriptor belongs to a different context.");
-            allocators[(int)descriptor.Allocator].Free(descriptor.BaseIndex, descriptor.Size);
+            allocator.Free(descriptor.BaseIndex, descriptor.Size);
+        }
+    }
+
+    internal class BFStaticContext : BFContext
+    {
+        internal BFStaticContext(BFIR ir, int ID) : base(ir, ID) { }
+
+        /// <summary>Current maximum memory size</summary>
+        public int MaxSize => allocator.MaxSize;
+
+        protected override int MemMap(BFContextMem memMap, int logicalIndex)
+        {
+            if (memMap != allocator)
+                throw new InvalidOperationException("Descriptor belongs to a different context.");
+            return logicalIndex;
+        }
+    }
+
+    internal class BFDynamicContext : BFContext
+    {
+        private readonly BFContextMem data;
+
+        internal BFDynamicContext(BFIR ir, int ID) : base(ir, ID)
+        {
+            data = new BFContextMem(this);
+        }
+
+        protected override int MemMap(BFContextMem memMap, int pos)
+        {
+            if (memMap == allocator)
+                return (pos / cfg.stackDens) * cfg.BlockSize + pos % cfg.stackDens + cfg.dataDens;
+            else if (memMap == data)
+                return (pos / cfg.dataDens) * cfg.BlockSize + pos % cfg.dataDens;
+
+            throw new InvalidOperationException("Descriptor belongs to a different context.");
+        }
+
+        internal BFVar GetData(int size = 1, int pos = 0)
+        {
+            return new BFVar(data, pos, size, false);
         }
     }
 }

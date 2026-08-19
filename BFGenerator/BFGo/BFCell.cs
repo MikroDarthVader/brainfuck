@@ -18,7 +18,7 @@ namespace BFGo
         {
             get
             {
-                if (!(owner.Context.ir is BFIRDebugger debugger))
+                if (owner.Context.ir is not BFIRDebugger debugger)
                     return -1;
 
                 return debugger.GetValue(debugger.ActiveContext.Resolve(owner, offset));
@@ -125,7 +125,7 @@ namespace BFGo
         /// <param name="codeElse"></param>
         public BFCell IfElse(Action codeIf, Action codeElse)
         {
-            using var tmp = ir.ActiveContext.Alloc(AllocatorKind.Stack, 1);
+            using var tmp = env.Alloc();
             tmp[0].Init(1);
             If(() =>
             {
@@ -192,10 +192,10 @@ namespace BFGo
                   dest.owner.Equals(owner) &&
                   dest.owner.Context.ID == owner.Context.ID)*/
             )];
-            using var tempDesc = ir.ActiveContext.Alloc(AllocatorKind.Stack);
+            using var tempDesc = env.Alloc();
             var tmp = tempDesc[0];
 
-            to = to.Append(tmp).ToArray();   // include temp in targets
+            to = [.. to, tmp];   // include temp in targets
             MoveTo(to);                      // self -> (to + temp)
             tmp.MoveTo(this);                // temp -> self, restoring original value
 
@@ -215,7 +215,7 @@ namespace BFGo
         public static void Compare(BFCell left, BFCell right)
         {
             // Three temporary cells for the algorithm
-            using var locals = left.ir.ActiveContext.Alloc(AllocatorKind.Stack, 3);
+            using var locals = left.env.Alloc(3);
             BFCell[] tmp = locals.ToArray();
             var flagB = tmp[0];   // 1 if other may be non‑zero in current iteration
             var counterB = tmp[1];   // counts successful decrements of other

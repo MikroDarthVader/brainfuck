@@ -13,7 +13,7 @@
         internal BFIR(BFGCfg cfg, BFGProgram env)
         {
             this.cfg = cfg;
-            ActiveContext = CreateCxt();
+            ActiveContext = new BFStaticContext(this, 0);
             this.env = env;
         }
 
@@ -28,25 +28,23 @@
                 ActiveContext = (inst as ShiftContext)!.newContext ?? ActiveContext;
         }
 
-        private int cxtCount = 0;
+        private int cxtCount = 1;
         internal BFContext CreateCxt()
         {
-            var cxt = new BFContext(this, cxtCount);
+            var cxt = new BFDynamicContext(this, cxtCount);
             cxtCount++;
             return cxt;
         }
     }
 
-    internal class BFIRGen : BFIR
+    internal class BFIRGen(BFGCfg cfg, BFGProgram env) : BFIR(cfg, env)
     {
         public override bool Debuggable => false;
-        private List<IRInst> insts = new List<IRInst>();
-
-        public BFIRGen(BFGCfg cfg, BFGProgram env) : base(cfg, env) { }
+        private readonly List<IRInst> insts = [];
 
         public string Compile()
         {
-            BFGen bFBuilder = new BFGen();
+            BFGen bFBuilder = new();
             foreach (var inst in insts)
                 inst.Compile(bFBuilder);
             return bFBuilder.ToString();

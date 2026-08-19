@@ -1,46 +1,56 @@
 ﻿namespace BFGo
 {
+    /// <summary>Base interface for all IR instructions.</summary>
     internal interface IRInst
     {
-        public IRInst Clone();
-        public string Compile(BFGen host);
+        /// <summary>Creates a deep copy of this instruction.</summary>
+        IRInst Clone();
+
+        /// <summary>Emits Brainfuck code for this instruction using the provided emitter.</summary>
+        string Compile(BFGen host);
     }
 
+    /// <summary>Marks the start of a loop.</summary>
     internal class LoopStart : IRInst
     {
         public string Compile(BFGen host) => host.BFPut('[');
         public IRInst Clone() => new LoopStart();
-        public override bool Equals(object? obj) => obj != null && obj is LoopStart;
+        public override bool Equals(object? obj) => obj is LoopStart;
         public override int GetHashCode() => typeof(LoopStart).GetHashCode();
         public override string ToString() => "[LoopStart]";
     }
 
+    /// <summary>Marks the end of a loop.</summary>
     internal class LoopEnd : IRInst
     {
         public string Compile(BFGen host) => host.BFPut(']');
         public IRInst Clone() => new LoopEnd();
-        public override bool Equals(object? obj) => obj != null && obj is LoopEnd;
+        public override bool Equals(object? obj) => obj is LoopEnd;
         public override int GetHashCode() => typeof(LoopEnd).GetHashCode();
         public override string ToString() => "[LoopEnd]";
     }
 
+    /// <summary>Outputs the current cell's value as a character.</summary>
     internal class Print : IRInst
     {
         public IRInst Clone() => new Print();
         public string Compile(BFGen host) => host.BFPut('.');
-        public override bool Equals(object? obj) => obj != null && obj is Print;
+        public override bool Equals(object? obj) => obj is Print;
         public override int GetHashCode() => typeof(Print).GetHashCode();
         public override string ToString() => "[Print]";
     }
+
+    /// <summary>Reads a character from input into the current cell.</summary>
     internal class Read : IRInst
     {
         public IRInst Clone() => new Read();
         public string Compile(BFGen host) => host.BFPut(',');
-        public override bool Equals(object? obj) => obj != null && obj is Read;
+        public override bool Equals(object? obj) => obj is Read;
         public override int GetHashCode() => typeof(Read).GetHashCode();
         public override string ToString() => "[Read]";
     }
 
+    /// <summary>Adds a delta to the current cell (positive or negative).</summary>
     internal class Change : IRInst
     {
         internal int val;
@@ -52,11 +62,14 @@
         public override string ToString() => $"[Change] (Value: {val})";
     }
 
+    /// <summary>
+    /// Represents a context shift that can be either constant or lazy.
+    /// Lazy shifts are used when the shift value depends on final context sizes.
+    /// </summary>
     internal class ShiftDescriptor
     {
         public int StaticShift { get; }
         public Func<int>? LazyProvider { get; }
-
         public int LateBoundSign { get; }
 
         public ShiftDescriptor(int staticShift = 0)
@@ -80,10 +93,15 @@
             LateBoundSign = lateBoundSign;
         }
 
+        /// <summary>Evaluates and returns the shift value.</summary>
         public int Shift => LazyProvider != null ? LazyProvider() : StaticShift;
 
         public ShiftDescriptor Clone() => new ShiftDescriptor(StaticShift, LazyProvider, LateBoundSign);
 
+        /// <summary>
+        /// Compares two descriptors for semantic equality.
+        /// Constants are compared by value; lazy descriptors are compared by sign.
+        /// </summary>
         public override bool Equals(object? obj)
         {
             if (obj is not ShiftDescriptor s) return false;
@@ -104,6 +122,10 @@
         }
     }
 
+    /// <summary>
+    /// Moves the tape head to a specific cell within the current or foreign context.
+    /// The target address is computed by the <see cref="relativePos"/> property.
+    /// </summary>
     internal class MoveTo : IRInst
     {
         public readonly BFVar descriptor;
@@ -115,6 +137,10 @@
             this.cellPos = cellPos;
         }
 
+        /// <summary>
+        /// Tape offset relative to the active context's origin,
+        /// including any transitional shift.
+        /// </summary>
         public int relativePos => descriptor.Context.Resolve(descriptor, cellPos) +
                                     (descriptor.isTransitional ? descriptor.cxtShift!.Shift : 0);
 
@@ -134,12 +160,16 @@
         public override string ToString()
         {
             return $"[MoveTo] (VarPos: {descriptor.BaseIndex}, " +
-                $"CellPos: {cellPos}, " +
-                $"ActiveShift: {descriptor.cxtShift}, " +
-                $"RelativePos: {relativePos})";
+                   $"CellPos: {cellPos}, " +
+                   $"ActiveShift: {descriptor.cxtShift}, " +
+                   $"RelativePos: {relativePos})";
         }
     }
 
+    /// <summary>
+    /// Shifts the tape head by a given offset, optionally switching to a new logical context.
+    /// The shift may be lazy (see <see cref="ShiftDescriptor"/>).
+    /// </summary>
     internal class ShiftContext : IRInst
     {
         public readonly BFContext? newContext;

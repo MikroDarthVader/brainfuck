@@ -1,7 +1,4 @@
 ﻿using BFGo;
-using System.Drawing;
-using System.Numerics;
-using System.Reflection.Metadata.Ecma335;
 
 namespace BFTypeSmart
 {
@@ -24,13 +21,13 @@ namespace BFTypeSmart
            var negDesc = Neg.From(desc);
 
            var ctx = desc.env;
-           using var tmp = ctx.Alloc(AllocatorKind.Stack, 1);
-           using var tmp2 = ctx.Alloc(AllocatorKind.Stack, 1);
+           using var tmp = ctx.Alloc(1);
+           using var tmp2 = ctx.Alloc(1);
 
-           using var flag = ctx.Alloc(AllocatorKind.Stack, 1);
+           using var flag = ctx.Alloc(1);
 
-           using var tmpPos = ctx.Alloc(AllocatorKind.Stack, Pos.Size);
-           using var tmpNeg = ctx.Alloc(AllocatorKind.Stack, Pos.Size);
+           using var tmpPos = ctx.Alloc(Pos.Size);
+           using var tmpNeg = ctx.Alloc(Pos.Size);
 
 
 
@@ -158,12 +155,12 @@ namespace BFTypeSmart
 
            var ctx = self.env;
 
-           using var other_tmp = ctx.Alloc(AllocatorKind.Stack, other.Size);
+           using var other_tmp = ctx.Alloc(other.Size);
            other.CopyTo(other_tmp);
 
-           using var duty = ctx.Alloc(AllocatorKind.Stack, 1);
+           using var duty = ctx.Alloc(1);
 
-           using var tmp = ctx.Alloc(AllocatorKind.Stack, 1);
+           using var tmp = ctx.Alloc(1);
 
            var min_size = other.Size < self.Size ? other.Size : self.Size;
 
@@ -236,12 +233,12 @@ namespace BFTypeSmart
 
            var ctx = self.env;
 
-           using var other_tmp = ctx.Alloc(AllocatorKind.Stack, other.Size);
+           using var other_tmp = ctx.Alloc(other.Size);
            other.CopyTo(other_tmp);
 
-           using var duty = ctx.Alloc(AllocatorKind.Stack, 1);
+           using var duty = ctx.Alloc(1);
 
-           using var tmp = ctx.Alloc(AllocatorKind.Stack, 1);
+           using var tmp = ctx.Alloc(1);
 
            var min_size = other.Size < self.Size ? other.Size : self.Size;
 
@@ -304,12 +301,12 @@ namespace BFTypeSmart
 
            var ctx = self.env;
 
-           using var other_tmp = ctx.Alloc(AllocatorKind.Stack, other.Size);
+           using var other_tmp = ctx.Alloc(other.Size);
            other.CopyTo(other_tmp);
 
-           using var duty = ctx.Alloc(AllocatorKind.Stack, 1);
+           using var duty = ctx.Alloc(1);
 
-           using var tmp = ctx.Alloc(AllocatorKind.Stack, 1);
+           using var tmp = ctx.Alloc(1);
 
            var min_size = other.Size < self.Size ? other.Size : self.Size;
 
@@ -375,9 +372,9 @@ namespace BFTypeSmart
            var ctx = desc.env;
 
            // Временные ячейки
-           using var flagVar = ctx.Alloc(AllocatorKind.Stack, 1);
-           using var tempVar = ctx.Alloc(AllocatorKind.Stack, 1);
-           using var tmp2Var = ctx.Alloc(AllocatorKind.Stack, 1);
+           using var flagVar = ctx.Alloc(1);
+           using var tempVar = ctx.Alloc(1);
+           using var tmp2Var = ctx.Alloc(1);
 
            var flag = flagVar[0];
            var temp = tempVar[0];
@@ -419,9 +416,9 @@ namespace BFTypeSmart
 
            var ctx = desc.env;
 
-           using var flagVar = ctx.Alloc(AllocatorKind.Stack, 1);
-           using var tempVar = ctx.Alloc(AllocatorKind.Stack, 1);
-           using var tmp2Var = ctx.Alloc(AllocatorKind.Stack, 1);
+           using var flagVar = ctx.Alloc(1);
+           using var tempVar = ctx.Alloc(1);
+           using var tmp2Var = ctx.Alloc(1);
 
            var flag = flagVar[0];
            var temp = tempVar[0];
@@ -486,11 +483,11 @@ namespace BFTypeSmart
        {
            var uintType = new BFUIntType(desc.Size + factor.Size);
 
-           using BFVar tmp = desc.env.Alloc(AllocatorKind.Stack, 1);
+           using BFVar tmp = desc.env.Alloc(1);
 
-           BFVar Out = desc.env.Alloc(AllocatorKind.Stack, desc.Size + factor.Size);
+           BFVar Out = desc.env.Alloc(desc.Size + factor.Size);
 
-           using BFVar factor_ = desc.env.Alloc(AllocatorKind.Stack, factor.Size);
+           using BFVar factor_ = desc.env.Alloc(factor.Size);
            factor.CopyTo(factor_);
 
            for (int i = 0; i < factor.Size; i++)
@@ -512,12 +509,12 @@ namespace BFTypeSmart
            int quantity_digits = (int)(num.Size * Math.Log10(256)) + 1;
            var uintType = new BFUIntType(2);
 
-           using var num_ = num.env.Alloc(AllocatorKind.Stack, num.Size);
-           using var carry = num.env.Alloc(AllocatorKind.Stack, 1);
-           using var temp = num.env.Alloc(AllocatorKind.Stack, 2);
-           using var tmp = num.env.Alloc(AllocatorKind.Stack, 1);
-           using var tmp2 = num.env.Alloc(AllocatorKind.Stack, 1);
-           using var digits = num.env.Alloc(AllocatorKind.Stack, quantity_digits);
+           using var num_ = num.env.Alloc(num.Size);
+           using var carry = num.env.Alloc(1);
+           using var temp = num.env.Alloc(2);
+           using var tmp = num.env.Alloc(1);
+           using var tmp2 = num.env.Alloc(1);
+           using var digits = num.env.Alloc(quantity_digits);
 
            num.CopyTo(num_);
            carry.Init();
@@ -601,7 +598,7 @@ namespace BFTypeSmart
        static public void StringPrint(BFVar desc, string s)
        {
            int c = 0;
-           using var C = desc.env.Alloc(AllocatorKind.Stack, 1);
+           using var C = desc.env.Alloc(1);
            C.Init();
            for (int i = 0; i < s.Length; i++)
            {
@@ -620,16 +617,16 @@ namespace BFTypeSmart
        static public void Print10(BFCell num) // в десятичной системе исчесления
        {
 
-           using var num_ = num.env.Alloc(AllocatorKind.Stack, 1);
+           using var num_ = num.env.Alloc(1);
            num.CopyTo(num_[0]);
 
-           using var numbers = num.env.Alloc(AllocatorKind.Stack, 3);
+           using var numbers = num.env.Alloc(3);
 
-           var tmp = num.env.Alloc(AllocatorKind.Stack, 1);
-           var flag = num.env.Alloc(AllocatorKind.Stack, 1);
+           var tmp = num.env.Alloc(1);
+           var flag = num.env.Alloc(1);
 
-           var q = num.env.Alloc(AllocatorKind.Stack, 1); // частное
-           var r = num.env.Alloc(AllocatorKind.Stack, 1); // остаток
+           var q = num.env.Alloc(1); // частное
+           var r = num.env.Alloc(1); // остаток
 
            for (int i = 0; i < 3; i++)
            {

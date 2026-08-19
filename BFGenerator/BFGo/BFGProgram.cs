@@ -30,15 +30,12 @@ namespace BFGo
         public int BlockSize => stackDens + dataDens;
     }
 
-    public class CompilerLifecycleException : InvalidOperationException
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public CompilerLifecycleException([CallerMemberName] string operation = "")
-            : base($"Compiler Execution Out of Bounds:\n" +
+    [method: MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public class CompilerLifecycleException([CallerMemberName] string operation = "") : 
+        InvalidOperationException($"Compiler Execution Out of Bounds:\n" +
                    $"Cannot execute '{operation}' outside of an active compilation pass.\n" +
                    $"Ensure this operation is called exclusively within the Code() scope during pipeline execution.")
-        {
-        }
+    {
     }
 
     public abstract class BFGProgram
@@ -58,11 +55,21 @@ namespace BFGo
             cfg = new BFGCfg(addrSize, stackDens, dataDens, cellSize);
         }
 
-        public BFVar Alloc(AllocatorKind kind, int size = 1)
+        public BFVar Alloc(int size = 1)
         {
             if (currIR == null)
                 throw new CompilerLifecycleException();
-            return currIR.ActiveContext.Alloc(kind, size);
+            return currIR.ActiveContext.Alloc(size);
+        }
+
+        public BFVar GetData(int size = 1, int pos = 0)
+        {
+            if (currIR == null)
+                throw new CompilerLifecycleException();
+            if (currIR.ActiveContext is not BFDynamicContext)
+                throw new InvalidOperationException("GetData could be exequted only in dynamic contexts");
+
+            return (currIR.ActiveContext as BFDynamicContext)!.GetData(size, pos);
         }
 
         public void GoFromStatic(BFVar addr, BFVar[]? move = null)
@@ -86,8 +93,7 @@ namespace BFGo
             currBFG.GoStatic(move);
         }
 
-        public BFVar AllocData(int size = 1) => Alloc(AllocatorKind.Data, size);
-        public BFVar AllocStack(int size = 1) => Alloc(AllocatorKind.Stack, size);
+        public BFVar Alloc(BFType ofType) => Alloc(ofType.Size);
 
         [DebuggerHidden]
         public void Break()
@@ -97,6 +103,24 @@ namespace BFGo
 
             if (Debugging && Debugger.IsAttached)
                 Debugger.Break();
+        }
+
+        /// <summary>
+        /// Emits a runtime crash trap. Prints the error code and locks the execution thread.
+        /// </summary>
+        public void Error(ErrCode error)
+        {
+            if (currBFG == null)
+                throw new CompilerLifecycleException();
+
+            using var errorCellDesc = Alloc();
+            var errorCell = errorCellDesc[0];
+
+            errorCell.Init((byte)error);
+            errorCell.Print();
+
+            Break(); //for debug runtime
+            errorCell.While(() => { }); //for bf runtime
         }
 
         public abstract void Code();
@@ -127,6 +151,12 @@ namespace BFGo
 
             currIR = null;
             currBFG = null;
+        }
+
+        public enum ErrCode
+        {
+            OK = 0,
+            ERR_SAME_PTR
         }
     }
 }

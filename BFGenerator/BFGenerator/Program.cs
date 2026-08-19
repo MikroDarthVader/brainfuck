@@ -1,39 +1,40 @@
 ﻿using BFGo;
-using BFTypeSmart;
 
 class Program
 {
-    class Test : BFGProgram
+    class Test() : BFGProgram(addrSize: 1, stackDens: 1, dataDens: 1, cellSize: 256)
     {
-        public Test(int addrSize, int stackDens, int dataDens, int cellSize)
-            : base(addrSize, stackDens, dataDens, cellSize) { }
-
         public override void Code()
         {
-            using var tmp = AllocStack(6);
-            BFaddressType bFaddressType6 = new BFaddressType(3);
-            BFUIntType bFUIntType3 = new BFUIntType(3);
+            using var tmp = Alloc();
+            tmp[0].Init(5);
 
-            tmp[0].Init(100);
-            tmp[1].Init();
-            tmp[2].Init();
+            GoFromStatic(addr: tmp);
+            GetData()[0].Init(42);
+            GoStatic();
 
-            tmp[3].Init(10);
-            tmp[4].Init(255);
-            tmp[5].Init();
+            var input = Alloc();
+            var ctr = Alloc();
+            ctr[0].Init(1);
+            input[0].Read();
+            GoFromStatic(addr: ctr, move: [ctr, input]);
+            input[0].While(() =>
+            {
+                ctr[0].Plus();
+                input[0].Minus();
 
-            bFaddressType6.shorten(tmp);
-            bFUIntType3.Print256(bFaddressType6.Pos.From(tmp));
-            CellFunc.StringPrint(tmp, "\n");
-            bFUIntType3.Print256(bFaddressType6.Neg.From(tmp));
+                GetData()[0].Print();
+
+                Go(addr: ctr, move: [ctr, input]);
+            });
         }
     }
 
     static void Main()
     {
-        var prg = new Test(addrSize: 1, stackDens: 1, dataDens: 1, cellSize: 256);
-        //prg.Debug(BFIOFormat.DetaledNumeric);
-        Compile(prg, BFIOFormat.ASCII);
+        var prg = new Test();
+        prg.Debug(BFIOFormat.DetaledNumeric);
+        //Compile(prg, BFIOFormat.DetaledNumeric);
     }
 
     static void Compile(BFGProgram prg, BFIOFormat IOFormat)
@@ -51,7 +52,7 @@ class Program
         byte[] tape = new byte[tapeSize];
         int ptr = 0;
         int pc = 0;
-        Stack<int> loopStack = new Stack<int>();
+        Stack<int> loopStack = new();
 
         while (pc < code.Length)
         {

@@ -10,7 +10,7 @@
         public int Size { get; private set; }
 
         // Fields registered via RegisterField (for recursive copy/move)
-        private List<(BFType child, int offset)> childFields = new();
+        private readonly List<(BFType child, int offset)> childFields = [];
         private BFType? parentType = null;
         private int offsetInParent = 0;
 
@@ -19,7 +19,7 @@
         /// </summary>
         protected BFType(int size = 0)
         {
-            if (size < 0) throw new ArgumentOutOfRangeException(nameof(size));
+            ArgumentOutOfRangeException.ThrowIfNegative(size);
             Size = size;
         }
 
@@ -76,13 +76,13 @@
             {
                 for (int i = 0; i < childFields.Count; i++)
                 {
-                    var srcFieldMeta = childFields[i];
+                    var (child, offset) = childFields[i];
                     var tgtFieldMeta = targetType.childFields[i];
 
-                    var srcField = source.Offset(srcFieldMeta.offset, srcFieldMeta.child.Size);
+                    var srcField = source.Offset(offset, child.Size);
                     var tgtField = target.Offset(tgtFieldMeta.offset, tgtFieldMeta.child.Size);
 
-                    srcFieldMeta.child.Copy(srcField, tgtField, tgtFieldMeta.child);
+                    child.Copy(srcField, tgtField, tgtFieldMeta.child);
                 }
             }
         }
@@ -104,13 +104,13 @@
             {
                 for (int i = 0; i < childFields.Count; i++)
                 {
-                    var srcFieldMeta = childFields[i];
+                    var (child, offset) = childFields[i];
                     var tgtFieldMeta = targetType.childFields[i];
 
-                    var srcField = source.Offset(srcFieldMeta.offset, srcFieldMeta.child.Size);
+                    var srcField = source.Offset(offset, child.Size);
                     var tgtField = target.Offset(tgtFieldMeta.offset, tgtFieldMeta.child.Size);
 
-                    srcFieldMeta.child.Move(srcField, tgtField, tgtFieldMeta.child);
+                    child.Move(srcField, tgtField, tgtFieldMeta.child);
                 }
             }
         }

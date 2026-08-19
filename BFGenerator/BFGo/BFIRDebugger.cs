@@ -11,12 +11,12 @@
     {
         private readonly BFIOFormat IOFormat;
         private readonly BFIRGen compiled;
-        private readonly BFContext staticCxt;
+        private readonly BFStaticContext staticCxt;
         
         public override bool Debuggable => true;
 
-        private readonly Dictionary<int, int> memStatic = new();
-        private readonly Dictionary<int, int> memDynamic = new();
+        private readonly Dictionary<int, int> memStatic = [];
+        private readonly Dictionary<int, int> memDynamic = [];
 
         private int dynCxtPos = 0, cellPos = 0;
         private int codeCursor = 0;
@@ -25,7 +25,7 @@
         {
             this.IOFormat = IOFormat;
             this.compiled = compiled;
-            staticCxt = ActiveContext;
+            staticCxt = (BFStaticContext)ActiveContext;
         }
 
         internal int GetValue(int addr)
@@ -105,7 +105,7 @@
 
             if (!expectedInst.Equals(inst))
             {
-                string GetInstDebugDetails(IRInst inst)
+                static string GetInstDebugDetails(IRInst inst)
                 {
                     return inst switch
                     {

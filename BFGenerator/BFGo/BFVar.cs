@@ -9,9 +9,7 @@ namespace BFGo
     [DebuggerDisplay("{DebugDisplay,nq}")]
     public class BFVar : IDisposable
     {
-
-        /// <summary>Allocator kind (Stack or Data).</summary>
-        public AllocatorKind Allocator { get; private set; }
+        internal BFContextMem owningMem { get; private set; }
 
         /// <summary>Number of cells.</summary>
         public int Size { get; private protected set; }
@@ -29,7 +27,7 @@ namespace BFGo
 
 
         /// <summary>Owning context.</summary>
-        internal BFContext Context { get; private set; }
+        internal BFContext Context => owningMem.owningCxt;
 
         /// <summary>Start index inside the allocator.</summary>
         internal int BaseIndex { get; private protected set; }
@@ -44,7 +42,7 @@ namespace BFGo
         {
             get
             {
-                if (!(Context.ir is BFIRDebugger debugger))
+                if (Context.ir is not BFIRDebugger debugger)
                     return "Debug mode disabled";
 
                 var vals = new int[Size];
@@ -57,17 +55,16 @@ namespace BFGo
         /// <summary>
         /// Creates a root descriptor from an allocator.
         /// </summary>
-        internal BFVar(BFContext context, AllocatorKind allocator, int baseIndex, int size)
+        internal BFVar(BFContextMem memMap, int baseIndex, int size, bool isMemOwner)
         {
             if (size <= 0) throw new ArgumentException("Size must be > 0");
             BaseIndex = baseIndex;
             Size = size;
-            Context = context;
-            Allocator = allocator;
+            owningMem = memMap;
 
             cxtShift = null;
             Parent = null;
-            IsAlive = true;
+            IsAlive = isMemOwner;
         }
 
         /// <summary>
@@ -88,8 +85,7 @@ namespace BFGo
 
             BaseIndex = other.BaseIndex + offset;
             Size = size;
-            Context = other.Context;
-            Allocator = other.Allocator;
+            owningMem = other.owningMem;
             cxtShift = other.cxtShift;
 
             Parent = other.Parent ?? other;
@@ -103,9 +99,8 @@ namespace BFGo
         {
             BaseIndex = other.BaseIndex;
             Size = other.Size;
-            Context = other.Context;
-            Allocator = other.Allocator;
-            
+            owningMem = other.owningMem;
+
             IsAlive = other.IsAlive;
             other.IsAlive = false;
 
@@ -113,15 +108,15 @@ namespace BFGo
         }
 
         /// <summary>Returns a new descriptor with an additional context shift function.</summary>
-        internal BFVar ApplyShift(Func<int> shift) => new BFVar(this, new ShiftDescriptor(shift));
+        internal BFVar ApplyShift(Func<int> shift) => new(this, new ShiftDescriptor(shift));
         /// <summary>Returns a new descriptor with an additional constant context shift.</summary>
-        internal BFVar ApplyShift(int shift) => new BFVar(this, new ShiftDescriptor(shift));
+        internal BFVar ApplyShift(int shift) => new(this, new ShiftDescriptor(shift));
 
         /// <summary>
         /// Returns a new root descriptor for a slice at the given offset with the specified size.
         /// </summary>
         internal BFVar Offset(int offset, int size = 0) =>
-            new BFVar(this, offset, size);
+            new(this, offset, size);
 
         // ---- cell access ----
         public BFCell this[int index]
@@ -153,7 +148,7 @@ namespace BFGo
                     if (i < targetDesc.Size)
                     {
                         var tgtCell = targetDesc[i];
-                        if (tgtCell != null) 
+                        if (tgtCell != null)
                             srcCell.CopyTo(tgtCell);
                     }
                 }
@@ -228,8 +223,7 @@ namespace BFGo
 
             BaseIndex = to.BaseIndex;
             Size = to.Size;
-            Context = to.Context;
-            Allocator = to.Allocator;
+            owningMem = to.owningMem;
             cxtShift = to.cxtShift;
             IsAlive = to.IsAlive;
 
@@ -243,15 +237,16 @@ namespace BFGo
 
             Context.Free(this);
             IsAlive = false;
+            GC.SuppressFinalize(this);
         }
 
         public override bool Equals(object? obj) =>
             obj is BFVar other &&
-            Allocator == other.Allocator &&
+            owningMem.GetType() == other.owningMem.GetType() &&
             BaseIndex == other.BaseIndex &&
             Size == other.Size &&
             Equals(other.cxtShift, cxtShift);
 
-        public override int GetHashCode() => HashCode.Combine(typeof(BFVar), Allocator, BaseIndex, Size, cxtShift);
+        public override int GetHashCode() => HashCode.Combine(typeof(BFVar), owningMem.GetType(), BaseIndex, Size, cxtShift);
     }
 }

@@ -11,10 +11,10 @@
         public bool Debugging => ir.Debuggable;
         public BFGCfg cfg => ir.cfg;
 
-        internal readonly BFContext staticCxt;
+        internal readonly BFStaticContext staticCxt;
 
-        private BFAddrComparerType movementType;
-        private BFAddrType addrType;
+        private readonly BFAddrComparerType movementType;
+        private readonly BFAddrType addrType;
         private BFVar? addr;
         private BFVar? movement;
         private BFVar? flags;
@@ -23,7 +23,7 @@
         {
             this.ir = ir;
 
-            staticCxt = ir.ActiveContext;
+            staticCxt = (BFStaticContext)ir.ActiveContext;
 
             movementType = new BFAddrComparerType(cfg.addrSize);
             addrType = new BFAddrType(cfg.addrSize);
@@ -49,9 +49,9 @@
             var moveFrom = move.OrderBy(x => x.BaseIndex).ToList();
 
             var zeroCxt = ir.CreateCxt();
-            addr = zeroCxt.Alloc(AllocatorKind.Stack, cfg.addrSize);
-            flags = zeroCxt.Alloc(AllocatorKind.Stack, 2);
-            movement = zeroCxt.Alloc(AllocatorKind.Stack, movementType.Size);
+            addr = zeroCxt.Alloc(cfg.addrSize);
+            flags = zeroCxt.Alloc(2);
+            movement = zeroCxt.Alloc(movementType.Size);
 
             foreach (var desc in moveFrom)
                 desc.Rebind(desc.ApplyShift(() => -staticCxt.MaxSize));
@@ -100,7 +100,7 @@
 
             foreach (BFVar desc in moveFrom)
             {
-                BFVar tmp = staticCxt.Alloc(AllocatorKind.Stack, desc.Size);
+                BFVar tmp = staticCxt.Alloc(desc.Size);
                 desc.MoveTo(tmp.ApplyShift(() => -staticCxt.MaxSize));
                 desc.Rebind(tmp);
             }
@@ -131,9 +131,9 @@
             isFollowUp.Init(0);
 
             var nextCxt = ir.CreateCxt();
-            var nextAddr = nextCxt.Alloc(AllocatorKind.Stack, cfg.addrSize);
-            var nextFlags = nextCxt.Alloc(AllocatorKind.Stack, 2);
-            var nextMovement = nextCxt.Alloc(AllocatorKind.Stack, movementType.Size);
+            var nextAddr = nextCxt.Alloc(cfg.addrSize);
+            var nextFlags = nextCxt.Alloc(2);
+            var nextMovement = nextCxt.Alloc(movementType.Size);
 
             var _moveFrom = new List<BFVar> { addr, flags };
             if (addrDest != null)
@@ -145,13 +145,13 @@
             if (addrDest != null)
                 moveTo.Add(!moveFromZero ? nextMovement : movementType.Pos.From(nextMovement));
             for (int i = moveTo.Count; i < moveFrom.Count; i++)
-                moveTo.Add(nextCxt.Alloc(AllocatorKind.Stack, moveFrom[i].Size));
+                moveTo.Add(nextCxt.Alloc(moveFrom[i].Size));
 
             for (int i = 0; i < addrType.Size; i++)
             {
-                var step = (int)Math.Pow(Math.Pow(2, cfg.cellSize), i) * cfg.BlockSize;
+                var step = (int)Math.Pow(cfg.cellSize, i) * cfg.BlockSize;
 
-                var doStep = (int _step) =>
+                void doStep(int _step)
                 {
                     addr[i].Change(_step > 0 ? 1 : -1);
 
@@ -167,10 +167,10 @@
 
                     isFollowUp.If(() =>
                     {
-                        MoveData(moveTo.Select(x => x.ApplyShift(0)).ToList(), moveTo, _step);
+                        MoveData([.. moveTo.Select(x => x.ApplyShift(0))], moveTo, _step);
                         ir.Add(new ShiftContext(_step));
                     });
-                };
+                }
 
                 if (addrDest == null)
                 {
@@ -196,14 +196,13 @@
                 }
             }
 
-            _ = isFirstStep.If(() =>
+            isFirstStep.If(() =>
             {
-                _ = new BFRuntimeError(ir.env, BFRuntimeError.ErrCode.ERR_SAME_PTR);
+                ir.env.Error(BFGProgram.ErrCode.ERR_SAME_PTR);
             });
 
             foreach (var desc in moveFrom)
                 (desc.Parent ?? desc).Dispose();
-
 
             ir.Add(new ShiftContext(0, nextCxt));
 
@@ -214,7 +213,7 @@
                 moveFrom[i].Rebind(moveTo[i]);
         }
 
-        private void MoveData(List<BFVar> sources, List<BFVar> targets, int shift)
+        private static void MoveData(List<BFVar> sources, List<BFVar> targets, int shift)
         {
             bool forward = shift > 0;
             int start = forward ? sources.Count - 1 : 0;
@@ -222,20 +221,14 @@
             int stepDelta = forward ? -1 : 1;
 
             for (int j = start; j != end; j += stepDelta)
-                MoveBlock(sources[j], targets[j].ApplyShift(shift), shift);
-        }
-
-        private void MoveBlock(BFVar src, BFVar dstShifted, int shift)
-        {
-            if (shift > 0)
             {
-                for (int i = src.Size - 1; i >= 0; i--)
-                    src[i].MoveTo(dstShifted[i]);
-            }
-            else
-            {
-                for (int i = 0; i < src.Size; i++)
-                    src[i].MoveTo(dstShifted[i]);
+                var dstShifted = targets[j].ApplyShift(shift);
+                if (shift > 0)
+                    for (int i = sources[j].Size - 1; i >= 0; i--)
+                        sources[j][i].MoveTo(dstShifted[i]);
+                else
+                    for (int i = 0; i < sources[j].Size; i++)
+                        sources[j][i].MoveTo(dstShifted[i]);
             }
         }
     }
