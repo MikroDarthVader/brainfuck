@@ -61,6 +61,7 @@ namespace BFGo
                 throw new CompilerLifecycleException();
             return currIR.ActiveContext.Alloc(size);
         }
+        public BFVar Alloc(BFType ofType) => Alloc(ofType.Size);
 
         public BFVar GetData(int size = 1, int pos = 0)
         {
@@ -71,6 +72,7 @@ namespace BFGo
 
             return (currIR.ActiveContext as BFDynamicContext)!.GetData(size, pos);
         }
+        public BFVar GetData(BFType ofType, int pos = 0) => GetData(ofType.Size, pos);
 
         public void GoFromStatic(BFVar addr, BFVar[]? move = null)
         {
@@ -92,8 +94,6 @@ namespace BFGo
                 throw new CompilerLifecycleException();
             currBFG.GoStatic(move);
         }
-
-        public BFVar Alloc(BFType ofType) => Alloc(ofType.Size);
 
         [DebuggerHidden]
         public void Break()
