@@ -40,7 +40,7 @@
             else
             {
                 addr += dynCxtPos;
-                if (addr < staticCxt.MaxSize)
+                if (addr < 0)
                     return memStatic.GetValueOrDefault(staticCxt.MaxSize + addr);
                 else
                     return memDynamic.GetValueOrDefault(addr);
@@ -59,7 +59,7 @@
             else
             {
                 addr += dynCxtPos;
-                if (addr < staticCxt.MaxSize)
+                if (addr < 0)
                     memStatic[staticCxt.MaxSize + addr] = val;
                 else
                     memDynamic[addr] = val;

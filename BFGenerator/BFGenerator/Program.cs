@@ -1,4 +1,5 @@
 ﻿using BFGo;
+using BFTypeSmart;
 
 class Program
 {
@@ -6,35 +7,47 @@ class Program
     {
         public override void Code()
         {
+            using var addr = Alloc();
             using var tmp = Alloc();
-            tmp[0].Init(5);
 
-            GoFromStatic(addr: tmp);
-            GetData()[0].Init(42);
-            GoStatic();
+            using var running = Alloc();
+            running[0].Init(1);
 
-            var input = Alloc();
-            var ctr = Alloc();
-            ctr[0].Init(1);
-            input[0].Read();
-            GoFromStatic(addr: ctr, move: [ctr, input]);
-            input[0].While(() =>
+            running[0].While(() =>
             {
-                ctr[0].Plus();
-                input[0].Minus();
 
-                GetData()[0].Print();
 
-                Go(addr: ctr, move: [ctr, input]);
+                addr[0].Plus();
+
+                GoFromStatic(addr: addr);
+                Break();
+                var b = GetData();
+                b[0].Read();
+                GoStatic();
+
+
+
+                addr.CopyTo(tmp);
+                tmp[0].While(() =>
+                {
+                    Break();
+                    GoFromStatic(addr: tmp);
+                    GetData()[0].Print();
+                    GoStatic();
+                    tmp[0].Minus();
+                });
+
+
             });
+
         }
     }
 
     static void Main()
     {
         var prg = new Test();
-        prg.Debug(BFIOFormat.DetaledNumeric);
-        //Compile(prg, BFIOFormat.DetaledNumeric);
+        prg.Debug(BFIOFormat.Numeric);
+        //Compile(prg, BFIOFormat.ASCII);
     }
 
     static void Compile(BFGProgram prg, BFIOFormat IOFormat)
