@@ -1,6 +1,4 @@
-﻿using System.Drawing;
-
-namespace BFGo
+﻿namespace BFGo
 {
     internal class BFContextMem(BFContext owningCxt)
     {

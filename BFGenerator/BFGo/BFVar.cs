@@ -9,7 +9,12 @@ namespace BFGo
     [DebuggerDisplay("{DebugDisplay,nq}")]
     public class BFVar : IDisposable
     {
-        internal BFContextMem owningMem { get; private set; }
+        private BFContextMem? _owningMem;
+        internal BFContextMem owningMem
+        {
+            get => Parent != null ? Parent.owningMem! : _owningMem!;
+            private set => _owningMem = value;
+        }
 
         /// <summary>Number of cells.</summary>
         public int Size { get; private protected set; }
@@ -23,8 +28,8 @@ namespace BFGo
         /// <summary>True if the memory block is active and has not been disposed.</summary>
         public bool IsAlive { get; private set; }
 
-        public BFGProgram env => Context.ir.env;
-
+        /// <summary>Owning environment.</summary>
+        public BFGProgram env => owningMem.owningCxt.ir.env;
 
         /// <summary>Owning context.</summary>
         internal BFContext Context => owningMem.owningCxt;
@@ -197,11 +202,53 @@ namespace BFGo
         }
 
         /// <summary>Sets every cell to zero.</summary>
-        public void Init()
+        public BFVar Init(params int[] values)
         {
             for (int i = 0; i < Size; i++)
-                TryGet(i)?.Init();
+                this[i].Init(i < values.Length ? values[i] : 0);
 
+            return this;
+        }
+
+        public BFVar While(Action code)
+        {
+            for (int i = 0; i < Size; i++)
+                this[i].While(code);
+
+            return this;
+        }
+
+        public BFVar If(Action code)
+        {
+            for (int i = 0; i < Size; i++)
+                this[i].If(code);
+
+            return this;
+
+        }
+
+        public BFVar Not()
+        {
+            for (int i = 0; i < Size; i++)
+                this[i].Not();
+
+            return this;
+        }
+
+        public BFVar Read()
+        {
+            for (int i = 0; i < Size; i++)
+                this[i].Read();
+
+            return this;
+        }
+
+        public BFVar Print()
+        {
+            for (int i = 0; i < Size; i++)
+                this[i].Print();
+
+            return this;
         }
 
         /// <summary>Converts to array of cells.</summary>

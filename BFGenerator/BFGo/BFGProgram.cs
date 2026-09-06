@@ -114,7 +114,7 @@ namespace BFGo
                 throw new CompilerLifecycleException();
 
             using var errorCellDesc = Alloc();
-            var errorCell = errorCellDesc[0];
+            var errorCell = errorCellDesc;
 
             errorCell.Init((byte)error);
             errorCell.Print();

@@ -4,7 +4,7 @@
     /// Abstract type descriptor. Knows its size and internal field layout.
     /// Provides methods to create real root descriptors and recursive copy/move.
     /// </summary>
-    public abstract class BFType
+    public class BFType
     {
         /// <summary>Total size of this type in cells.</summary>
         public int Size { get; private set; }
@@ -42,6 +42,7 @@
             return fieldType;
         }
 
+        protected BFType RegisterField(int size) => RegisterField(new BFType(size));
 
         /// <summary>
         /// Creates a root descriptor by applying this type's layout to the given root.

@@ -3,7 +3,7 @@
 namespace BFTypeSmart
 {
    
-   public class BFaddressType : BFType
+   /*public class BFaddressType : BFType
    {
        public BFUIntType Pos { get; }
        public BFUIntType Neg { get; }
@@ -670,6 +670,6 @@ namespace BFTypeSmart
            numbers[0].Plus(48);
            numbers[0].Print();
        }
-   }
+   }*/
 
 }

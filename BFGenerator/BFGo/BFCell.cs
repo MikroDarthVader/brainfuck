@@ -120,22 +120,15 @@ namespace BFGo
         /// Not self Safe
         /// O(n)
         /// </summary>
-        /// <param name="s1"></param>
-        /// <param name="codeIf"></param>
-        /// <param name="codeElse"></param>
-        public BFCell IfElse(Action codeIf, Action codeElse)
+        public BFCell Not()
         {
             using var tmp = env.Alloc();
-            tmp[0].Init(1);
+            tmp.Init(1);
             If(() =>
             {
-                codeIf();
                 tmp.Init();
             });
-            tmp[0].If(() =>
-            {
-                codeElse();
-            });
+            tmp[0].MoveTo(this);
             return this;
         }
 
@@ -215,29 +208,25 @@ namespace BFGo
         public static void Compare(BFCell left, BFCell right)
         {
             // Three temporary cells for the algorithm
-            using var locals = left.env.Alloc(3);
-            BFCell[] tmp = locals.ToArray();
-            var flagB = tmp[0];   // 1 if other may be non‑zero in current iteration
-            var counterB = tmp[1];   // counts successful decrements of other
-            var flagSelfGt = tmp[2];   // remembers that self was strictly greater at some point
-
-            foreach (var cell in tmp)
-                cell.Init();
+            var env = left.env;
+            using var flagB = env.Alloc().Init();   // 1 if other may be non‑zero in current iteration
+            using var counterB = env.Alloc().Init();   // counts successful decrements of other
+            using var flagSelfGt = env.Alloc().Init();   // remembers that self was strictly greater at some point
 
             left.While(() =>
             {
                 // ---- Try to decrement other once, if it is non‑zero ----
-                flagB.Plus();                       // assume other is non‑zero
+                flagB[0].Plus();                       // assume other is non‑zero
                 right.While(() =>
                 {
                     flagB.Init();                   // other was non‑zero → clear flag
-                    counterB.Plus();                // count successful decrement
+                    counterB[0].Plus();                // count successful decrement
                     right.Minus();
                 });
 
                 // ---- Accumulate results ----
-                flagB.AddTo(flagSelfGt);            // if flagB remained set, other was zero → remember self > other
-                counterB.AddTo(right);              // return all temporarily removed decrements back to other
+                flagB[0].AddTo(flagSelfGt[0]);            // if flagB remained set, other was zero → remember self > other
+                counterB[0].AddTo(right);              // return all temporarily removed decrements back to other
 
                 // ---- Decrement both cells ----
                 left.Minus();
