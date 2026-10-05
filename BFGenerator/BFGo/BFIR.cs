@@ -2,42 +2,22 @@
 {
     internal abstract class BFIR
     {
-        protected abstract void _Add(IRInst inst);
+        internal abstract void Add(IRInst inst);
         public abstract void While(Action code);
         public abstract bool Debuggable { get; }
 
-        internal BFContext ActiveContext { get; private protected set; }
-        internal readonly BFGCfg cfg;
+        internal readonly BFContext Context;
+
         internal readonly BFGProgram env;
 
-        internal BFIR(BFGCfg cfg, BFGProgram env)
+        internal BFIR(BFGProgram env)
         {
-            this.cfg = cfg;
-            ActiveContext = new BFStaticContext(this, 0);
             this.env = env;
-        }
-
-        internal void Add(IRInst inst)
-        {
-            if (inst is MoveTo moveInst && moveInst.descriptor.Context != ActiveContext && !moveInst.descriptor.isTransitional)
-                throw new InvalidOperationException("Cannot generate MoveTo for a foreign descriptor without a context shift function.");
-
-            _Add(inst);
-
-            if (inst is ShiftContext)
-                ActiveContext = (inst as ShiftContext)!.newContext ?? ActiveContext;
-        }
-
-        private int cxtCount = 1;
-        internal BFContext CreateCxt()
-        {
-            var cxt = new BFDynamicContext(this, cxtCount);
-            cxtCount++;
-            return cxt;
+            Context = new BFContext(this);
         }
     }
 
-    internal class BFIRGen(BFGCfg cfg, BFGProgram env) : BFIR(cfg, env)
+    internal class BFIRGen(BFGProgram env) : BFIR(env)
     {
         public override bool Debuggable => false;
         private readonly List<IRInst> insts = [];
@@ -45,10 +25,18 @@
         public string Compile()
         {
             BFGen bFBuilder = new();
+
+            // Static cells occupy negative logical addresses.
+            // Shift right by StaticScope.Size so that logical 0 maps to physical
+            // StaticSize and no tape index goes negative.
+            bFBuilder.BFShiftContext(Context.StaticScope.Size);
+
             foreach (var inst in insts)
                 inst.Compile(bFBuilder);
             return bFBuilder.ToString();
         }
+
+        public List<IRInst> GetIR() => insts;
 
         public override void While(Action code)
         {
@@ -57,7 +45,7 @@
             Add(new LoopEnd());
         }
 
-        protected override void _Add(IRInst inst) => insts.Add(inst);
+        internal override void Add(IRInst inst) => insts.Add(inst);
         public IRInst this[int ind] => insts[ind];
         public int Count => insts.Count;
     }

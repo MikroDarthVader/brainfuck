@@ -59,40 +59,32 @@ namespace BFGo
         {
             if (currIR == null)
                 throw new CompilerLifecycleException();
-            return currIR.ActiveContext.Alloc(size);
+            return currIR.Context.StaticScope.Alloc(size);
         }
         public BFVar Alloc(BFType ofType) => Alloc(ofType.Size);
+
+        public BFScope CreateScope()
+        {
+            if (currIR == null)
+                throw new CompilerLifecycleException();
+            return new BFScope(currIR.Context.CreateStackScope());
+        }
 
         public BFVar GetData(int size = 1, int pos = 0)
         {
             if (currIR == null)
                 throw new CompilerLifecycleException();
-            if (currIR.ActiveContext is not BFDynamicContext)
-                throw new InvalidOperationException("GetData could be exequted only in dynamic contexts");
 
-            return (currIR.ActiveContext as BFDynamicContext)!.GetData(size, pos);
+            return currIR.Context.GetData(size, pos);
         }
+
         public BFVar GetData(BFType ofType, int pos = 0) => GetData(ofType.Size, pos);
 
-        public void GoFromStatic(BFVar addr, BFVar[]? move = null)
+        public void Go(BFVar? addr)
         {
             if (currBFG == null)
                 throw new CompilerLifecycleException();
-            currBFG.GoFromStatic(addr, move);
-        }
-
-        public void Go(BFVar addr, BFVar[]? move = null)
-        {
-            if (currBFG == null)
-                throw new CompilerLifecycleException();
-            currBFG.Go(addr, move);
-        }
-
-        public void GoStatic(BFVar[]? move = null)
-        {
-            if (currBFG == null)
-                throw new CompilerLifecycleException();
-            currBFG.GoStatic(move);
+            currBFG.Go(addr);
         }
 
         [DebuggerHidden]
@@ -108,26 +100,22 @@ namespace BFGo
         /// <summary>
         /// Emits a runtime crash trap. Prints the error code and locks the execution thread.
         /// </summary>
-        public void Error(ErrCode error)
+        public void Error(int error)
         {
             if (currBFG == null)
                 throw new CompilerLifecycleException();
 
-            using var errorCellDesc = Alloc();
-            var errorCell = errorCellDesc;
-
-            errorCell.Init((byte)error);
-            errorCell.Print();
-
+            using var scope = CreateScope();
+            var errorDesc = scope.Alloc().Set(error).Print();
             Break(); //for debug runtime
-            errorCell.While(() => { }); //for bf runtime
+            errorDesc.While(() => { }); //for bf runtime
         }
 
         public abstract void Code();
 
         public string Compile()
         {
-            currIR = new BFIRGen(cfg, this);
+            currIR = new BFIRGen(this);
             currBFG = new BFG(currIR);
             Code();
 
@@ -141,22 +129,16 @@ namespace BFGo
 
         public void Debug(BFIOFormat debugFormat)
         {
-            currIR = new BFIRGen(cfg, this);
+            currIR = new BFIRGen(this);
             currBFG = new BFG(currIR);
             Code();
 
-            currIR = new BFIRDebugger((BFIRGen)currIR, debugFormat);
+            currIR = new BFIRDebugger(this, ((BFIRGen)currIR).GetIR(), debugFormat);
             currBFG = new BFG(currIR);
             Code();
 
             currIR = null;
             currBFG = null;
-        }
-
-        public enum ErrCode
-        {
-            OK = 0,
-            ERR_SAME_PTR
         }
     }
 }

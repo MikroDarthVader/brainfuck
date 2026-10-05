@@ -2,74 +2,31 @@
 
 namespace BFGo
 {
-    /// <summary>
-    /// Has context and optional context shift.
-    /// Provides cell access and block operations.
-    /// </summary>
     [DebuggerDisplay("{DebugDisplay,nq}")]
-    public class BFVar : IDisposable
+    public class BFVar
     {
-        private BFContextMem? _owningMem;
-        internal BFContextMem owningMem
-        {
-            get => Parent != null ? Parent.owningMem! : _owningMem!;
-            private set => _owningMem = value;
-        }
-
-        /// <summary>Number of cells.</summary>
-        public int Size { get; private protected set; }
-
-        /// <summary>Root variable descriptor that owns the allocated memory block.</summary>
-        public readonly BFVar? Parent;
-
-        /// <summary>True if this descriptor directly owns the allocated context block.</summary>
-        public bool IsOwner => Parent == null;
-
-        /// <summary>True if the memory block is active and has not been disposed.</summary>
-        public bool IsAlive { get; private set; }
-
-        /// <summary>Owning environment.</summary>
-        public BFGProgram env => owningMem.owningCxt.ir.env;
-
-        /// <summary>Owning context.</summary>
-        internal BFContext Context => owningMem.owningCxt;
-
-        /// <summary>Start index inside the allocator.</summary>
-        internal int BaseIndex { get; private protected set; }
-
-        /// <summary>Optional context shift for cross-context access.</summary>
-        internal ShiftDescriptor? cxtShift;
-
-        /// <summary>True if this variable belongs to a foreign context and requires translation.</summary>
-        internal bool isTransitional => cxtShift != null;
+        internal readonly BFMemView Space;
+        public readonly int Size;
+        internal readonly int Addr;
 
         internal string DebugDisplay
         {
             get
             {
-                if (Context.ir is not BFIRDebugger debugger)
+                if (Space.Context.ir is not BFIRDebugger debugger)
                     return "Debug mode disabled";
 
-                var vals = new int[Size];
-                for (int i = 0; i < Size; i++)
-                    vals[i] = debugger.GetValue(debugger.ActiveContext.Resolve(this, i));
+                var vals = debugger.GetVarValues(this);
                 return $"Size: {Size}, Values: ({string.Join(", ", vals)})";
             }
         }
 
-        /// <summary>
-        /// Creates a root descriptor from an allocator.
-        /// </summary>
-        internal BFVar(BFContextMem memMap, int baseIndex, int size, bool isMemOwner)
+        internal BFVar(BFMemView mem, int addr, int size = 1)
         {
             if (size <= 0) throw new ArgumentException("Size must be > 0");
-            BaseIndex = baseIndex;
+            Addr = addr;
             Size = size;
-            owningMem = memMap;
-
-            cxtShift = null;
-            Parent = null;
-            IsAlive = isMemOwner;
+            Space = mem;
         }
 
         /// <summary>
@@ -88,58 +45,45 @@ namespace BFGo
                 throw new ArgumentOutOfRangeException(nameof(size),
                     $"Requested size {size} is out of available range [1, {maxAvailable}].");
 
-            BaseIndex = other.BaseIndex + offset;
+            Addr = other.Addr + offset;
             Size = size;
-            owningMem = other.owningMem;
-            cxtShift = other.cxtShift;
-
-            Parent = other.Parent ?? other;
-            IsAlive = false;
+            Space = other.Space;
         }
 
         /// <summary>
-        /// Private constructor for applying a context shift function.
-        /// </summary>
-        private BFVar(BFVar other, ShiftDescriptor cxtShift)
-        {
-            BaseIndex = other.BaseIndex;
-            Size = other.Size;
-            owningMem = other.owningMem;
-
-            IsAlive = other.IsAlive;
-            other.IsAlive = false;
-
-            this.cxtShift = cxtShift;
-        }
-
-        /// <summary>Returns a new descriptor with an additional context shift function.</summary>
-        internal BFVar ApplyShift(Func<int> shift) => new(this, new ShiftDescriptor(shift));
-        /// <summary>Returns a new descriptor with an additional constant context shift.</summary>
-        internal BFVar ApplyShift(int shift) => new(this, new ShiftDescriptor(shift));
-
-        /// <summary>
-        /// Returns a new root descriptor for a slice at the given offset with the specified size.
+        /// Returns a new descriptor for a slice at the given offset with the specified size.
         /// </summary>
         internal BFVar Offset(int offset, int size = 0) =>
             new(this, offset, size);
 
         // ---- cell access ----
-        public BFCell this[int index]
+        public BFVar this[int index]
         {
             get
             {
                 if (index < 0 || index >= Size)
-                    throw new ArgumentOutOfRangeException(nameof(index), index, $"Structural Memory Violation: Requested index is out of bounds for the variable descriptor. Valid cell range is [0, {Size - 1}]. For safe boundary checks, use '{nameof(TryGet)}()' instead.");
+                    throw new ArgumentOutOfRangeException(nameof(index), index,
+                        $"Structural Memory Violation: Requested index is out of bounds for the variable descriptor. " +
+                        $"Valid cell range is [0, {Size - 1}]. For safe boundary checks, use '{nameof(TryGet)}()' instead.");
 
-                return new BFCell(this, index);
+                return new BFVar(this, index, 1);
             }
         }
 
-        public BFCell? TryGet(int index)
+        public BFVar? TryGet(int index = 0)
+        {
+            if (index >= Size || index < 0) return null;
+            return new BFVar(this, index, 1);
+        }
+
+        internal BFCell GetCell(int index = 0) => new BFCell(this, index);
+        internal BFCell? TryGetCell(int index = 0)
         {
             if (index >= Size || index < 0) return null;
             return new BFCell(this, index);
         }
+
+        internal int Resolve(int cellAddr) => Space.Resolve(Addr + cellAddr);
 
         // ---- block operations ----
         /// <summary>Copies this block to one or more root descriptors.</summary>
@@ -147,12 +91,12 @@ namespace BFGo
         {
             for (int i = 0; i < Size; i++)
             {
-                var srcCell = this[i];
+                var srcCell = GetCell(i);
                 foreach (var targetDesc in to)
                 {
                     if (i < targetDesc.Size)
                     {
-                        var tgtCell = targetDesc[i];
+                        var tgtCell = targetDesc.GetCell(i);
                         if (tgtCell != null)
                             srcCell.CopyTo(tgtCell);
                     }
@@ -160,15 +104,13 @@ namespace BFGo
             }
             // Zero-fill remaining cells in targets larger than source
             int maxSize = 0;
-            foreach (var t in to) if (t.Size > maxSize) maxSize = t.Size;
+            foreach (var t in to) 
+                if (t.Size > maxSize) 
+                    maxSize = t.Size;
+
             for (int i = Size; i < maxSize; i++)
-            {
                 foreach (var targetDesc in to)
-                {
-                    if (i < targetDesc.Size)
-                        targetDesc.TryGet(i)?.Init();
-                }
-            }
+                    targetDesc.TryGetCell(i)?.Set();
         }
 
         /// <summary>Moves this block (clearing source) to root descriptors.</summary>
@@ -179,121 +121,72 @@ namespace BFGo
 
             for (int i = 0; i < Math.Max(Size, maxSize); i++)
             {
-                var srcCell = i < Size ? this[i] : null;
+                var srcCell = TryGetCell(i);
                 foreach (var targetDesc in to)
                 {
                     if (i < targetDesc.Size)
                     {
-                        var tgtCell = targetDesc[i];
-                        if (tgtCell == null) continue;
+                        var tgtCell = targetDesc.GetCell(i);
                         if (srcCell != null)
                             srcCell.MoveTo(tgtCell);
                         else
-                            tgtCell.Init();
+                            tgtCell.Set();
                     }
                 }
             }
+
             // Clear remaining source cells that were not moved
             if (Size > maxSize)
             {
                 for (int i = maxSize; i < Size; i++)
-                    TryGet(i)?.Init();
+                    TryGetCell(i)?.Set();
             }
         }
 
-        /// <summary>Sets every cell to zero.</summary>
-        public BFVar Init(params int[] values)
+        private BFVar ApplyToAll(Action<int, BFCell> op)
         {
             for (int i = 0; i < Size; i++)
-                this[i].Init(i < values.Length ? values[i] : 0);
-
+                op(i, GetCell(i));
             return this;
         }
 
-        public BFVar While(Action code)
+        public BFVar While(Action code) => ApplyToAll((_, c) => c.While(code));
+        public BFVar Not() => ApplyToAll((_, c) => c.Not());
+        public BFVar Read() => ApplyToAll((_, c) => c.Read());
+        public BFVar Print() => ApplyToAll((_, c) => c.Print());
+        public BFVar If(Action code) => ApplyToAll((_, c) => c.If(code));
+
+        public BFVar Change(params int[] values)
+            => ApplyToAll((i, c) => c.Change(i < values.Length ? values[i] : 0));
+        public BFVar Set(params int[] values)
+            => ApplyToAll((i, c) => c.Set(i < values.Length ? values[i] : 0));
+
+        /// <summary>
+        /// Destructive for both sides. Subtracts the smaller value from both,
+        /// digit-wise for multi-cell variables. See BFCell.Compare for semantics.
+        /// </summary>
+        public static void Compare(BFVar left, BFVar right)
         {
-            for (int i = 0; i < Size; i++)
-                this[i].While(code);
-
-            return this;
-        }
-
-        public BFVar If(Action code)
-        {
-            for (int i = 0; i < Size; i++)
-                this[i].If(code);
-
-            return this;
-
-        }
-
-        public BFVar Not()
-        {
-            for (int i = 0; i < Size; i++)
-                this[i].Not();
-
-            return this;
-        }
-
-        public BFVar Read()
-        {
-            for (int i = 0; i < Size; i++)
-                this[i].Read();
-
-            return this;
-        }
-
-        public BFVar Print()
-        {
-            for (int i = 0; i < Size; i++)
-                this[i].Print();
-
-            return this;
+            int n = Math.Min(left.Size, right.Size);
+            for (int i = 0; i < n; i++)
+                BFCell.Compare(left.GetCell(i), right.GetCell(i));
         }
 
         /// <summary>Converts to array of cells.</summary>
-        public BFCell[] ToArray()
+        public BFVar[] ToArray()
         {
-            var array = new BFCell[Size];
+            var array = new BFVar[Size];
             for (int i = 0; i < Size; i++)
                 array[i] = this[i];
             return array;
         }
 
-        /// <summary>
-        /// Replaces the contents of this descriptor with those of <paramref name="to"/>.
-        /// Used to rebind user descriptors after a context switch.
-        /// </summary>
-        public void Rebind(BFVar to)
-        {
-            Dispose();
-
-            BaseIndex = to.BaseIndex;
-            Size = to.Size;
-            owningMem = to.owningMem;
-            cxtShift = to.cxtShift;
-            IsAlive = to.IsAlive;
-
-            to.IsAlive = false;
-        }
-
-        public void Dispose()
-        {
-            if (!IsAlive)
-                return;
-
-            Context.Free(this);
-            IsAlive = false;
-            GC.SuppressFinalize(this);
-        }
-
         public override bool Equals(object? obj) =>
             obj is BFVar other &&
-            owningMem.GetType() == other.owningMem.GetType() &&
-            BaseIndex == other.BaseIndex &&
-            Size == other.Size &&
-            Equals(other.cxtShift, cxtShift);
+            Space.Resolve(Addr) == other.Space.Resolve(other.Addr) &&
+            Addr == other.Addr &&
+            Size == other.Size;
 
-        public override int GetHashCode() => HashCode.Combine(typeof(BFVar), owningMem.GetType(), BaseIndex, Size, cxtShift);
+        public override int GetHashCode() => HashCode.Combine(typeof(BFVar), Space.Resolve(Addr), Addr, Size);
     }
 }

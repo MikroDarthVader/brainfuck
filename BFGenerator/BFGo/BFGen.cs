@@ -9,6 +9,8 @@ namespace BFGo
     {
         private readonly StringBuilder bf = new();
 
+        /// Head position within the current frame, in logical coordinates.
+        /// ShiftContext does not touch it: the frame moves with the head.
         private int posInContext;
 
         /// <summary>
@@ -39,7 +41,8 @@ namespace BFGo
         }
 
         /// <summary>
-        /// Shifts the tape head by <paramref name="shift"/>
+        /// Emits a coordinate system shift by shift cells.
+        /// posInContext is unchanged: the head moves with the frame.
         /// </summary>
         public string BFShiftContext(int shift)
         {

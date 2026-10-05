@@ -17,7 +17,7 @@
         /// <summary>
         /// Creates a root type with the given size.
         /// </summary>
-        protected BFType(int size = 0)
+        public BFType(int size = 0)
         {
             ArgumentOutOfRangeException.ThrowIfNegative(size);
             Size = size;
@@ -115,6 +115,5 @@
                 }
             }
         }
-
     }
 }

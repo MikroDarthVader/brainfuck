@@ -1,4 +1,7 @@
-﻿namespace BFGo
+﻿using System;
+using System.Collections.Generic;
+
+namespace BFGo
 {
     public enum BFIOFormat
     {
@@ -9,196 +12,118 @@
 
     internal class BFIRDebugger : BFIR
     {
+        private readonly List<IRInst> compiled;
         private readonly BFIOFormat IOFormat;
-        private readonly BFIRGen compiled;
-        private readonly BFStaticContext staticCxt;
-        
+
         public override bool Debuggable => true;
 
-        private readonly Dictionary<int, int> memStatic = [];
-        private readonly Dictionary<int, int> memDynamic = [];
+        // Single logical address space: static lives in negative positions,
+        // stack/data in non-negative. dynCxtPos is the current frame origin.
+        private readonly Dictionary<int, int> mem = [];
+        private int dynCxtPos;
+        private int cellPos;
+        private int codeCursor;
 
-        private int dynCxtPos = 0, cellPos = 0;
-        private int codeCursor = 0;
-
-        public BFIRDebugger(BFIRGen compiled, BFIOFormat IOFormat) : base(compiled.cfg, compiled.env)
+        public BFIRDebugger(BFGProgram env, List<IRInst> compiled, BFIOFormat format) : base(env)
         {
-            this.IOFormat = IOFormat;
             this.compiled = compiled;
-            staticCxt = (BFStaticContext)ActiveContext;
+            IOFormat = format;
         }
 
-        internal int GetValue(int addr)
+        private int Abs => dynCxtPos + cellPos;
+        private int GetCurr() => mem.GetValueOrDefault(Abs);
+        private void SetCurr(int val) => mem[Abs] = val;
+
+        /// <summary>Reads current values of all cells in <paramref name="var"/>.</summary>
+        internal int[] GetVarValues(BFVar var)
         {
-            if (ActiveContext == staticCxt)
-            {
-                if (addr > staticCxt.MaxSize)
-                    return memDynamic.GetValueOrDefault(addr - staticCxt.MaxSize);
-                else
-                    return memStatic.GetValueOrDefault(addr);
-            }
-            else
-            {
-                addr += dynCxtPos;
-                if (addr < 0)
-                    return memStatic.GetValueOrDefault(staticCxt.MaxSize + addr);
-                else
-                    return memDynamic.GetValueOrDefault(addr);
-            }
+            var vals = new int[var.Size];
+            for (int i = 0; i < var.Size; i++)
+                vals[i] = mem.GetValueOrDefault(dynCxtPos + var.Resolve(i));
+            return vals;
         }
-
-        private void SetValue(int val, int addr)
-        {
-            if (ActiveContext == staticCxt)
-            {
-                if (addr > staticCxt.MaxSize)
-                    memDynamic[addr - staticCxt.MaxSize] = val;
-                else
-                    memStatic[addr] = val;
-            }
-            else
-            {
-                addr += dynCxtPos;
-                if (addr < 0)
-                    memStatic[staticCxt.MaxSize + addr] = val;
-                else
-                    memDynamic[addr] = val;
-            }
-        }
-
-        private int GetCurrValue() => GetValue(cellPos);
-        private void SetCurrValue(int val) => SetValue(val, cellPos);
 
         public override void While(Action code)
         {
-            codeCursor++; //skip loopStart IRInst
-            int startAddr = codeCursor;
+            codeCursor++; // skip LoopStart
+            int start = codeCursor;
 
-            while (GetCurrValue() > 0)
+            while (GetCurr() > 0)
             {
-                codeCursor = startAddr;
+                codeCursor = start;
                 code();
             }
 
-            for (int depth = 1; depth > 0; codeCursor++) //skip loop and LoopEnd
+            for (int depth = 1; depth > 0; codeCursor++) // skip loop body and LoopEnd
             {
-                if (compiled[codeCursor] is LoopStart)
-                    depth++;
-                else if (compiled[codeCursor] is LoopEnd)
-                    depth--;
+                if (compiled[codeCursor] is LoopStart) depth++;
+                else if (compiled[codeCursor] is LoopEnd) depth--;
             }
         }
 
-        protected override void _Add(IRInst inst)
+        internal override void Add(IRInst inst)
         {
             if (codeCursor >= compiled.Count)
-            {
                 throw new InvalidOperationException(
-                    $"[BFG Pipeline Mismatch] Live run emitted an EXTRA instruction at step index {codeCursor}.\n" +
-                    $"Live instruction received: {inst}\n" +
-                    $"Expected: End of compiled bytecode sequence.\n\n" +
-                    $"Cause: Your high-level C# loop logic or contextual allocations generated " +
-                    $"more commands on this runtime iteration than during the shadow compile pass.");
-            }
+                    $"[BFG Pipeline Mismatch] Extra instruction at index {codeCursor}.\n" +
+                    $"  Received: {inst}\n" +
+                    $"  Compiled IR ended prematurely. " +
+                    $"Loop logic or contextual allocations differ between passes.");
 
-            var expectedInst = compiled[codeCursor];
+            var expected = compiled[codeCursor];
 
-            if (!expectedInst.Equals(inst))
-            {
-                static string GetInstDebugDetails(IRInst inst)
-                {
-                    return inst switch
-                    {
-                        Change c => $"Value modification delta: {c.val}",
-                        MoveTo mv => $"Local layout memory offset (relativePos): {mv.relativePos}, Target variable descriptor: {mv.descriptor}",
-                        ShiftContext sc => $"Global context displacement (ShiftDelta): {sc.shiftFromParentCxt.Shift}, Target Context ID: {(sc.newContext != null ? sc.newContext.ID.ToString() : "Null (Relative)")}",
-                        _ => inst.ToString() ?? inst.GetType().Name
-                    };
-                }
-
-                string expectedDetails = GetInstDebugDetails(expectedInst);
-                string actualDetails = GetInstDebugDetails(inst);
-
-                bool isCurrentlyStatic = (ActiveContext == staticCxt);
-                string contextMode = isCurrentlyStatic ? "Static Root Context" : $"Dynamic Context (ID: {ActiveContext.ID})";
-
-                string contextShiftInfo = isCurrentlyStatic
-                    ? "None (operating on static base layout)"
-                    : $"{dynCxtPos} cells away from static root (dynamic window offset)";
-
+            if (!expected.Equals(inst))
                 throw new InvalidOperationException(
-                    $"[BFG Pipeline Mismatch] Structural invariance broken at baseline index {codeCursor}!\n\n" +
-                    $"EXPECTED (Shadow Pass):\n" +
-                    $"  Type: {expectedInst.GetType().Name}\n" +
-                    $"  Data: {expectedDetails}\n\n" +
-                    $"RECEIVED (Live Run):\n" +
-                    $"  Type: {inst.GetType().Name}\n" +
-                    $"  Data: {actualDetails}\n\n" +
-                    $"Context Tracking State:\n" +
-                    $"  Active Execution Mode: {contextMode}\n" +
-                    $"  Dynamic Window Shift (dynCxtPos): {contextShiftInfo}\n" +
-                    $"  Local Virtual Head   (cellPos): {cellPos}\n" +
-                    $"  Calculated Virtual Key (addr): {cellPos} (maps to dynamic dictionary base when out of static bounds)\n\n" +
-                    $"Error Check: Ensure that local C# variables, counters, or multi-pass allocations " +
-                    $"inside your While loop do not fluctuate or depend on the runtime loop iteration count.");
-            }
+                    $"[BFG Pipeline Mismatch] at index {codeCursor}.\n" +
+                    $"  Expected: {expected}\n" +
+                    $"  Actual:   {inst}\n" +
+                    $"  dynCxtPos={dynCxtPos}, cellPos={cellPos}");
 
             switch (inst)
             {
                 case Change c:
                     {
-                        var val = GetCurrValue();
-                        val += c.val;
-                        val %= cfg.cellSize;
-                        if (val < 0)
-                            val += cfg.cellSize;
-                        SetCurrValue(val);
+                        int val = GetCurr() + c._val;
+                        val %= env.cfg.cellSize;
+                        if (val < 0) val += env.cfg.cellSize;
+                        SetCurr(val);
                     }
                     break;
 
                 case MoveTo mv:
-                    cellPos = mv.relativePos;
+                    cellPos = mv.addr + mv.shift;
                     break;
 
                 case ShiftContext sc:
-                    if (sc.newContext != staticCxt && ActiveContext != staticCxt)
-                        dynCxtPos += sc.shiftFromParentCxt.Shift;
+                    dynCxtPos += sc.shift;
                     break;
 
                 case Print:
                     {
-                        var val = GetCurrValue();
+                        int val = GetCurr();
                         if (IOFormat == BFIOFormat.ASCII)
                             Console.Write((char)val);
                         else if (IOFormat == BFIOFormat.Numeric)
                             Console.WriteLine($"Print: {val}");
                         else
-                            Console.WriteLine($"Print cell {cellPos}, context {dynCxtPos}: {val}");
+                            Console.WriteLine($"Print cell {cellPos}, frame {dynCxtPos}: {val}");
                     }
                     break;
 
                 case Read:
                     if (IOFormat == BFIOFormat.ASCII)
-                        SetCurrValue(Console.Read());
-                    else if (IOFormat == BFIOFormat.Numeric)
-                    {
-                        Console.Write("Read: ");
-                        if (int.TryParse(Console.ReadLine(), out int val))
-                            SetCurrValue(val);
-                        else
-                            SetCurrValue(0);
-                    }
+                        SetCurr(Console.Read());
                     else
                     {
-                        Console.Write($"Read cell {cellPos}, context {dynCxtPos}: ");
-                        if (int.TryParse(Console.ReadLine(), out int val))
-                            SetCurrValue(val);
-                        else
-                            SetCurrValue(0);
-                    }
-                    break;
+                        Console.Write(IOFormat == BFIOFormat.Numeric
+                            ? "Read: "
+                            : $"Read cell {cellPos}, frame {dynCxtPos}: ");
 
-                default:
+                        if (int.TryParse(Console.ReadLine(), out int val))
+                            SetCurr(val);
+                        else
+                            SetCurr(0);
+                    }
                     break;
             }
 
