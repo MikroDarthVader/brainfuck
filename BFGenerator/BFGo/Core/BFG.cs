@@ -26,9 +26,83 @@
                 Neg = RegisterField(new BFType(addrSize));
             }
 
+            /// <summary>
+            /// Digit-wise subtractive compare. After call, each digit pair
+            /// (pos[i], neg[i]) has the smaller value subtracted from both.
+            /// </summary>
             public void Optimize(BFVar desc)
             {
-                BFVar.Compare(Pos.From(desc), Neg.From(desc));
+                var pos = Pos.From(desc);
+                var neg = Neg.From(desc);
+                int n = Math.Min(pos.Size, neg.Size);
+                for (int i = 0; i < n; i++)
+                    CompareDigit(pos[i], neg[i]);
+            }
+
+            /// <summary>
+            /// Destructive for both cells.
+            /// Subtracts the smaller value from both.
+            /// After call:
+            ///   if left >= right : left = left - right, right = 0
+            ///   if left &lt;  right : left = 0, right = right - left
+            /// O(n2).
+            /// </summary>
+            private static void CompareDigit(BFVar left, BFVar right)
+            {
+                using var scope = left.Space.Context.ir.env.CreateScope();
+
+                // flagB: 1 if right may still be non-zero in the current iteration.
+                // counterB: counts how many times right was successfully decremented.
+                // flagSelfGt: remembers whether left was ever strictly greater than right.
+                var flagB = scope.Alloc();
+                var counterB = scope.Alloc();
+                var flagSelfGt = scope.Alloc();
+
+                // Invariant: each iteration reduces both sides by 1.
+                // flagSelfGt records whether left was ever strictly greater than right,
+                // which needs a correction pass at the end.
+                left.While(() =>
+                {
+                    // ---- Try to decrement right once, if it is non-zero ----
+                    flagB.Change(1);
+                    right.While(() =>
+                    {
+                        flagB.Zero();
+                        counterB.Change(1);
+                        right.Change(-1);
+                    });
+
+                    // ---- Accumulate results ----
+                    DigitAddTo(flagB, flagSelfGt);
+                    DigitAddTo(counterB, right);
+
+                    // ---- Decrement both cells ----
+                    left.Change(-1);
+                    right.Change(-1);
+                });
+
+                // ---- Correction for the case left > right ----
+                flagSelfGt.If(() =>
+                {
+                    right.While(() =>
+                    {
+                        left.Change(1);
+                        right.Change(1);
+                    });
+                });
+            }
+
+            /// <summary>
+            /// Destructive. src => 0, dst += src.
+            /// O(n).
+            /// </summary>
+            private static void DigitAddTo(BFVar src, BFVar dst)
+            {
+                src.While(() =>
+                {
+                    src.Change(-1);
+                    dst.Change(1);
+                });
             }
         }
 
@@ -48,8 +122,6 @@
             service = ctx.CreateStackScope();
             addr = service.Alloc(addrType.Size);
             movement = service.Alloc(movementType.Size);
-
-            addr.Set();
         }
 
         /// Moves the frame to the context at dest (root if null), carrying the stack.
@@ -65,7 +137,6 @@
                 movementType.Pos.From(movement).Set();
             addr.CopyTo(movementType.Neg.From(movement));
 
-            ctx.SetAtRoot(dest == null);
             movementType.Optimize(movement);
 
             for (int i = 0; i < addrType.Size; i++)
@@ -73,11 +144,12 @@
                 int step = (int)Math.Pow(cfg.cellSize, i) * cfg.BlockSize;
                 var p = movementType.Pos.From(movement)[i];
                 var n = movementType.Neg.From(movement)[i];
-                var a = addr[i];
 
                 p.While(() => { p.Change(-1); addr[i].Change(1); Step(step); });
                 n.While(() => { n.Change(-1); addr[i].Change(-1); Step(-step); });
             }
+
+            ctx.SetAtRoot(dest == null);
         }
 
         /// <summary>

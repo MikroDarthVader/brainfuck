@@ -21,6 +21,18 @@ namespace BFGo
             if (cellSize <= 0)
                 throw new ArgumentException("Cell size must be greater than zero.", nameof(cellSize));
 
+            long limit = int.MaxValue / ((long)stackDens + dataDens);
+            long p = 1;
+            for (int i = 0; i < addrSize; i++)
+            {
+                if (p > limit / cellSize)
+                    throw new ArgumentException(
+                        $"Configuration overflows Int32 in Go step computation: " +
+                        $"cellSize^{addrSize} * (stackDens + dataDens) exceeds Int32.MaxValue.",
+                        nameof(addrSize));
+                p *= cellSize;
+            }
+
             this.addrSize = addrSize;
             this.stackDens = stackDens;
             this.dataDens = dataDens;
@@ -55,6 +67,10 @@ namespace BFGo
             cfg = new BFGCfg(addrSize, stackDens, dataDens, cellSize);
         }
 
+        /// <summary>
+        /// Allocates a static variable of the given size.
+        /// Auto-zeroed: holds 0 immediately after this call in the generated program.
+        /// </summary>
         public BFVar Alloc(int size = 1)
         {
             if (currIR == null)
@@ -70,6 +86,11 @@ namespace BFGo
             return new BFScope(currIR.Context.CreateStackScope());
         }
 
+        /// <summary>
+        /// Returns a descriptor for persistent data cells at logical offset pos.
+        /// NOT auto-zeroed: data cells are global and persist across Go calls.
+        /// Their runtime value is whatever was last written to them.
+        /// </summary>
         public BFVar GetData(int size = 1, int pos = 0)
         {
             if (currIR == null)

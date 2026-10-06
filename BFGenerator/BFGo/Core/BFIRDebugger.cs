@@ -7,7 +7,7 @@ namespace BFGo
     {
         ASCII,
         Numeric,
-        DetaledNumeric
+        DetailedNumeric
     }
 
     internal class BFIRDebugger : BFIR

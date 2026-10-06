@@ -66,6 +66,10 @@
 
         internal bool IsActive(BFStackScope scope) => StackScopes.Count > 0 && scope == StackScopes.Peek();
 
-        internal BFVar GetData(int size, int pos) => new(DataView, pos, size);
+        internal BFVar GetData(int size, int pos)
+        {
+            if (pos < 0) throw new ArgumentOutOfRangeException(nameof(pos));
+            return new BFVar(DataView, pos, size);
+        }
     }
 }

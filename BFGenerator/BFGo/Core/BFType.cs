@@ -66,7 +66,7 @@
         /// </summary>
         public void Copy(BFVar source, BFVar target, BFType targetType)
         {
-            if (GetType() != targetType.GetType())
+            if (GetType() != targetType.GetType() || childFields.Count != targetType.childFields.Count)
                 throw new InvalidOperationException($"Type mismatch: Cannot transfer data from '{GetType().Name}' to '{targetType.GetType().Name}'.");
 
             if (childFields.Count == 0)
@@ -84,34 +84,6 @@
                     var tgtField = target.Offset(tgtFieldMeta.offset, tgtFieldMeta.child.Size);
 
                     child.Copy(srcField, tgtField, tgtFieldMeta.child);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Recursively moves data from source to target (source is cleared), respecting the structure 
-        /// of both the source type and the provided target type configuration.
-        /// </summary>
-        public void Move(BFVar source, BFVar target, BFType targetType)
-        {
-            if (GetType() != targetType.GetType())
-                throw new InvalidOperationException($"Type mismatch: Cannot transfer data from '{GetType().Name}' to '{targetType.GetType().Name}'.");
-
-            if (childFields.Count == 0)
-            {
-                source.MoveTo(target);
-            }
-            else
-            {
-                for (int i = 0; i < childFields.Count; i++)
-                {
-                    var (child, offset) = childFields[i];
-                    var tgtFieldMeta = targetType.childFields[i];
-
-                    var srcField = source.Offset(offset, child.Size);
-                    var tgtField = target.Offset(tgtFieldMeta.offset, tgtFieldMeta.child.Size);
-
-                    child.Move(srcField, tgtField, tgtFieldMeta.child);
                 }
             }
         }
