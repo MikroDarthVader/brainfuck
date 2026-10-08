@@ -22,7 +22,6 @@
         {
             var res = new BFVar(this, Size, size);
             Size += size;
-            res.Zero();
             return res;
         }
 
@@ -58,6 +57,11 @@
         {
             if (_disposed) return;
             _disposed = true;
+            for(int i = 0; i < Size; i++)
+            {
+                Context.ir.Add(new MoveTo(Resolve(i)));
+                Context.ir.While(() => Context.ir.Add(new Change(-1)));
+            }
             Context.OnScopeDispose(this);
             GC.SuppressFinalize(this);
         }
